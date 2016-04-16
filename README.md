@@ -32,7 +32,7 @@ Its instructive to see the diff between
 [1.elm](https://github.com/debois/elm-parts/blob/master/examples/1.elm) (1 counter)
 and
 [2.elm](https://github.com/debois/elm-parts/blob/master/examples/2.elm) (2 counters). It's just this: 
-
+```    
     38a39,43
     > counter1 : Counter.Part Model Action
     > counter1 =
@@ -41,6 +41,7 @@ and
     > 
     43a49
     >     , counter1.view addr model
+```
 
 That is, all you need to do is create an additional part (first change), then use
 it in your view-function (second part). 
