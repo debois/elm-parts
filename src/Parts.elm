@@ -8,24 +8,6 @@ module Parts
 
 {-| 
 
-The Elm Architecture (TEA) is conceptually very nice, but it forces us to write
-large amounts of boilerplate whenever we need to use a component.  We must:
-
-  1. Retain the state of the component in our Model 
-  2. Add the components actions to our Action 
-  3. Dispatch those actions in our update
-
-None of these things have anything to do with what we want from the component, 
-namely rendering it in our View function, and potentially reacting to some 
-(but not all) of its actions---e.g., we want to react to a Click of a button, 
-but we don't care when it updates its animation state. 
-
-This module provides an extensible mechanism for lifting arbitrary
-(differently-typed) TEA components into components having the same type of Model
-and Action, all of which can be dispatched by the single `update` function in
-this module. We call such a lifted component a "part" (think "interchangeable
-parts".)
-
 # Elm Architecture types
 @docs Update, View
 

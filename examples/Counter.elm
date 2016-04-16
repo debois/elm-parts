@@ -51,7 +51,6 @@ countStyle =
 
 -- PART
 
-
 type alias Container c = 
   { c | counter : Indexed Model }
 
@@ -76,6 +75,3 @@ part =
   Parts.new 
     view update'
     .counter (\x m -> {m | counter = x})
-
-
-
