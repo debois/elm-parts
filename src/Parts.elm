@@ -1,7 +1,7 @@
 module Parts
   ( embed, embedIndexed, Embedding, Observer
   , View, Update, Indexed
-  , Part, part, part1
+  , Part, new, new1
   , update
   , Action
   ) where
@@ -33,7 +33,7 @@ parts".)
 @docs Indexed, Embedding, embed, embedIndexed
 
 # Part construction
-@docs Action, Part, Observer, part, part1
+@docs Action, Part, Observer, new, new1
 
 # Part consumption
 @docs update
@@ -134,8 +134,8 @@ embedIndexed :
   (container -> Indexed model) ->              -- a getter 
   (Indexed model -> container -> container) -> -- a setter
   model ->                                     -- an initial model for this part
-  Int ->                                       -- an part id (*)
-  Embedding model container action a           -- ... produce a Component.
+  Int ->                                       -- a part id (*)
+  Embedding model container action a           -- ... produce a Part.
 
 embedIndexed view update get set model0 id = 
   let 
@@ -280,15 +280,15 @@ connect observers subaction =
   pick ((|>) subaction) observers
 
 
-{-| Given a lifting function, a list of observers and an embedding, construct an 
+{-| Given a lifting function, a list of observers and an embedding, construct a 
 Part. 
 -}
-part' 
+new'
   : (Action container obs -> obs) 
   -> List (Observer action obs) 
   -> Embedding model container action a 
   -> Part model container action obs a
-part' lift observers embedding = 
+new' lift observers embedding = 
   let 
     fwd = 
       pack (observe (connect observers) embedding.update) >> lift
@@ -310,7 +310,7 @@ part' lift observers embedding =
 
 {-| It is helpful to see parameter names: 
 
-    part view update get set id lift model0 observers = 
+    new view update get set id lift model0 observers = 
       ...
 
 Convert a regular Elm Architecture component (`view`, `update`) to a part, 
@@ -331,7 +331,7 @@ Its instructive to compare the types of the input and output views:
 That is, this function fully converts a view from its own `model` and `action`
 to the master `container` model and `observation` action. 
 -}
-part
+new
   : View model action a
   -> Update model action
   -> (container -> Indexed model)
@@ -342,15 +342,15 @@ part
   -> List (Observer action obs)
   -> Part model container action obs a
 
-part view update get set id lift model0 observers = 
+new view update get set id lift model0 observers = 
   embedIndexed view update get set model0 id 
-    |> part' lift observers
+    |> new' lift observers
 
 
-{-| Variant of `part` for components that are naturally singletons 
-(e.g., snackbar, layout).
+{-| Variant of `new` for parts that will be used only once in any 
+TEA component. 
 -}
-part1
+new1
  : View model action a
   -> Update model action
   -> (container -> Maybe model)
@@ -360,9 +360,9 @@ part1
   -> List (Observer action obs)
   -> Part model container action obs a
 
-part1 view update get set lift model0 observers = 
+new1 view update get set lift model0 observers = 
   embed view update (get >> Maybe.withDefault model0) (Just >> set)
-    |> part' lift observers
+    |> new' lift observers
 
 
 -- HELPERS
