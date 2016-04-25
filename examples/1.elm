@@ -33,14 +33,14 @@ update action model =
 
 counter0 : Counter.Part Model Action
 counter0 = 
-  Counter.part 0 PartAction 0 []
+  Counter.part [0] PartAction 0 
 
 
 view : Signal.Address Action -> Model -> Html 
 view addr model = 
   div 
     []
-    [ counter0.view addr model
+    [ counter0.view [] addr model
     ]
   
 

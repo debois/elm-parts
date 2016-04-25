@@ -1,10 +1,11 @@
 {
     "version": "1.0.0", 
     "summary": "Elm library to reduce Elm Architecture boilerplate",
-    "repository": "https://github.com/debois/elm-mdl.git",
+    "repository": "https://github.com/debois/elm-parts.git",
     "license": "BSD3",
     "source-directories": [
-        "src"
+        "src", 
+        "examples"
     ],
     "exposed-modules": [
         "Parts"

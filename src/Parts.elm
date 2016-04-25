@@ -1,7 +1,7 @@
 module Parts
   ( embed, embedIndexed, Embedding, Observer
-  , View, Update, Indexed
-  , Part, new, new1
+  , View, Update, Index, Indexed
+  , Part, instance, instance1
   , update
   , Action
   ) where
@@ -12,10 +12,10 @@ module Parts
 @docs Update, View
 
 # Embeddings 
-@docs Indexed, Embedding, embed, embedIndexed
+@docs Index, Indexed, Embedding, embed, embedIndexed
 
 # Part construction
-@docs Action, Part, Observer, new, new1
+@docs Action, Part, Observer, instance, instance1
 
 # Part consumption
 @docs update
@@ -56,11 +56,16 @@ type alias View model action a =
 -- EMBEDDING MODELS 
 
 
+{-|
+-}
+type alias Index 
+  = List Int
+
 
 {-| Indexed families of things.
 -}
 type alias Indexed a = 
-  Dict Int a 
+  Dict Index a 
 
 
 {-| An __embedding__ of an Elm Architecture component is a variant in which
@@ -116,7 +121,7 @@ embedIndexed :
   (container -> Indexed model) ->              -- a getter 
   (Indexed model -> container -> container) -> -- a setter
   model ->                                     -- an initial model for this part
-  Int ->                                       -- a part id (*)
+  Index ->                                     -- a part id (*)
   Embedding model container action a           -- ... produce a Part.
 
 embedIndexed view update get set model0 id = 
@@ -127,7 +132,7 @@ embedIndexed view update get set model0 id =
     set' submodel model = 
       set (Dict.insert id submodel (get model)) model 
   in 
-      embed view update get' set' 
+    embed view update get' set' 
 
 
 
@@ -197,10 +202,11 @@ update fwd (A f) container =
 
 
 
--- INSTANCES
+-- PARTS
 
 
-
+type alias Observers action obs = 
+  List (Observer action obs)
 
 
 
@@ -209,11 +215,10 @@ get/set/map for the inner model, and a forwarder lifting component
 actions to observations. 
 -}
 type alias Part model container action obs a = 
-  { view : View container obs a
+  { view : Observers action obs -> View container obs a
   , get : container -> model
   , set : model -> container -> container
   , map : (model -> model) -> container -> container
-  , fwd : action -> obs 
   }
 
 
@@ -265,34 +270,30 @@ connect observers subaction =
 {-| Given a lifting function, a list of observers and an embedding, construct a 
 Part. 
 -}
-new'
+instance'
   : (Action container obs -> obs) 
-  -> List (Observer action obs) 
   -> Embedding model container action a 
   -> Part model container action obs a
-new' lift observers embedding = 
+instance' lift embedding = 
   let 
-    fwd = 
+    fwd observers = 
       pack (observe (connect observers) embedding.update) >> lift
     get = 
       embedding.getModel
     set = 
       embedding.setModel
   in
-    { view = 
-        \addr -> 
-          embedding.view (Signal.forwardTo addr fwd) 
+    { view = \observers addr -> embedding.view (Signal.forwardTo addr (fwd observers)) 
     , get = get
     , set = set
     , map = \f model -> set (f (get model)) model
-    , fwd = fwd
     }
 
 
 
 {-| It is helpful to see parameter names: 
 
-    new view update get set id lift model0 observers = 
+  instance view update get set id lift model0 observers = 
       ...
 
 Convert a regular Elm Architecture component (`view`, `update`) to a part, 
@@ -313,7 +314,55 @@ Its instructive to compare the types of the input and output views:
 That is, this function fully converts a view from its own `model` and `action`
 to the master `container` model and `observation` action. 
 -}
-new
+instance
+  : View model action a
+  -> Update model action
+  -> (container -> Indexed model)
+  -> (Indexed model -> container -> container)
+  -> Index
+  -> (Action container obs -> obs)
+  -> model
+  -> Part model container action obs a
+
+instance view update get set id lift model0 = 
+  embedIndexed view update get set model0 id 
+    |> instance' lift 
+
+
+{-| Variant of `instance` for parts that will be used only once in any 
+TEA component. 
+-}
+instance1
+ : View model action a
+  -> Update model action
+  -> (container -> Maybe model)
+  -> (Maybe model -> container -> container)
+  -> (Action container obs -> obs)
+  -> model
+  -> Part model container action obs a
+
+instance1 view update get set lift model0 = 
+  embed view update (get >> Maybe.withDefault model0) (Just >> set)
+    |> instance' lift 
+
+
+-- MULTIPART
+
+
+
+
+{-| 
+type alias IndexedPart model container action obs a = 
+  Index -> 
+    { view : View container obs a
+    , get : container -> model
+    , set : model -> container -> container
+    , map : (model -> model) -> container -> container
+    , fwd : action -> obs 
+    }
+
+
+instanceIndexed 
   : View model action a
   -> Update model action
   -> (container -> Indexed model)
@@ -322,29 +371,15 @@ new
   -> (Action container obs -> obs)
   -> model
   -> List (Observer action obs)
+  -> Index
   -> Part model container action obs a
 
-new view update get set id lift model0 observers = 
-  embedIndexed view update get set model0 id 
-    |> new' lift observers
-
-
-{-| Variant of `new` for parts that will be used only once in any 
-TEA component. 
+instanceIndexed view update get set id lift model0 observers subid = 
+  embedIndexed view update get set model0 (id :: subid)
+    |> instance' lift observers
 -}
-new1
- : View model action a
-  -> Update model action
-  -> (container -> Maybe model)
-  -> (Maybe model -> container -> container)
-  -> (Action container obs -> obs)
-  -> model
-  -> List (Observer action obs)
-  -> Part model container action obs a
 
-new1 view update get set lift model0 observers = 
-  embed view update (get >> Maybe.withDefault model0) (Just >> set)
-    |> new' lift observers
+
 
 
 -- HELPERS

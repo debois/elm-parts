@@ -66,12 +66,19 @@ type alias Part container obs =
 
 
 part
-    : Int
+    : Parts.Index
     -> (Parts.Action (Container c) obs -> obs)
     -> Model
-    -> List (Parts.Observer Action obs)
     -> Part (Container c) obs
 part = 
-  Parts.new 
+  Parts.instance 
     view update'
     .counter (\x m -> {m | counter = x})
+
+
+onChange : (Action -> a) -> Action -> Maybe a
+onChange f action = 
+  Just (f action)
+  
+
+  

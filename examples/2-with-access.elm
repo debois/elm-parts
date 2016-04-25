@@ -33,20 +33,20 @@ update action model =
 
 counter0 : Counter.Part Model Action
 counter0 = 
-  Counter.part 0 PartAction 0 []
+  Counter.part [0] PartAction 0 
 
 
 counter1 : Counter.Part Model Action
 counter1 =
-  Counter.part 1 PartAction 0 [] 
+  Counter.part [1] PartAction 0
 
 
 view : Signal.Address Action -> Model -> Html 
 view addr model = 
   div 
     []
-    [ counter0.view addr model
-    , counter1.view addr model
+    [ counter0.view [] addr model
+    , counter1.view [] addr model
     , br [] []
     , text <| "Sum: " ++ toString (counter0.get model + counter1.get model)
     ]
