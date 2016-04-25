@@ -328,12 +328,12 @@ instance
   -> Update model action
   -> (container -> Indexed model)
   -> (Indexed model -> container -> container)
-  -> Index
   -> (Action container obs -> obs)
   -> model
+  -> Index
   -> Part model container action obs a
 
-instance view update get set id lift model0 = 
+instance view update get set lift model0 id = 
   embedIndexed view update get set model0 id 
     |> instance' lift 
 
