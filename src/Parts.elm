@@ -56,7 +56,16 @@ type alias View model action a =
 -- EMBEDDING MODELS 
 
 
-{-|
+{-| An __index__ is used to identify instances of components. E.g., if
+  your app uses two instances of a button components, these instances need to
+  have distinct indices. 
+  
+  Rather than being simply integers, indexes are lists of integers.  This type
+  is convenient for dynamically generated components, where you do not
+  necessarily know the number of component instances up front. In this case,
+  give the ith component the index `[0,i]`. Remaining components of your app
+  can just use indices `[1]`, `[2]`, etc; the use of lists precludes accidental
+  re-use of instance ids. 
 -}
 type alias Index 
   = List Int
@@ -329,7 +338,7 @@ instance view update get set id lift model0 =
     |> instance' lift 
 
 
-{-| Variant of `instance` for parts that will be used only once in any 
+{-| Variant of `instance` for parts that will be used only once in any given
 TEA component. 
 -}
 instance1
@@ -344,42 +353,6 @@ instance1
 instance1 view update get set lift model0 = 
   embed view update (get >> Maybe.withDefault model0) (Just >> set)
     |> instance' lift 
-
-
--- MULTIPART
-
-
-
-
-{-| 
-type alias IndexedPart model container action obs a = 
-  Index -> 
-    { view : View container obs a
-    , get : container -> model
-    , set : model -> container -> container
-    , map : (model -> model) -> container -> container
-    , fwd : action -> obs 
-    }
-
-
-instanceIndexed 
-  : View model action a
-  -> Update model action
-  -> (container -> Indexed model)
-  -> (Indexed model -> container -> container)
-  -> Int
-  -> (Action container obs -> obs)
-  -> model
-  -> List (Observer action obs)
-  -> Index
-  -> Part model container action obs a
-
-instanceIndexed view update get set id lift model0 observers subid = 
-  embedIndexed view update get set model0 (id :: subid)
-    |> instance' lift observers
--}
-
-
 
 
 -- HELPERS
