@@ -58,9 +58,9 @@ update action model =
 
 -- VIEW
 
-counter : Parts.Index -> Counter.Part Model Action
-counter id = 
-  Counter.part id PartAction 0
+counter : Parts.Index -> Counter.Instance Model Action
+counter = 
+  Counter.instance PartAction 
 
 
 view : Signal.Address Action -> Model -> Html 

@@ -1,7 +1,7 @@
 module Parts
   ( embed, embedIndexed, Embedding, Observer
   , View, Update, Index, Indexed
-  , Part, instance, instance1
+  , Instance, instance, instance1
   , update
   , Action
   ) where
@@ -14,10 +14,10 @@ module Parts
 # Embeddings 
 @docs Index, Indexed, Embedding, embed, embedIndexed
 
-# Part construction
-@docs Action, Part, Observer, instance, instance1
+# Instance construction
+@docs Action, Instance, Observer, instance, instance1
 
-# Part consumption
+# Instance consumption
 @docs update
 
 -}
@@ -130,8 +130,8 @@ embedIndexed :
   (container -> Indexed model) ->              -- a getter 
   (Indexed model -> container -> container) -> -- a setter
   model ->                                     -- an initial model for this part
-  Index ->                                     -- a part id (*)
-  Embedding model container action a           -- ... produce a Part.
+  Index ->                                     -- a part id 
+  Embedding model container action a           -- ... produce an Embedding.
 
 embedIndexed view update get set model0 id = 
   let 
@@ -223,7 +223,7 @@ type alias Observers action obs =
 get/set/map for the inner model, and a forwarder lifting component 
 actions to observations. 
 -}
-type alias Part model container action obs a = 
+type alias Instance model container action obs a = 
   { view : Observers action obs -> View container obs a
   , get : container -> model
   , set : model -> container -> container
@@ -277,12 +277,12 @@ connect observers subaction =
 
 
 {-| Given a lifting function, a list of observers and an embedding, construct a 
-Part. 
+Instance. 
 -}
 instance'
   : (Action container obs -> obs) 
   -> Embedding model container action a 
-  -> Part model container action obs a
+  -> Instance model container action obs a
 instance' lift embedding = 
   let 
     fwd observers = 
@@ -328,12 +328,12 @@ instance
   -> Update model action
   -> (container -> Indexed model)
   -> (Indexed model -> container -> container)
-  -> (Action container obs -> obs)
   -> model
+  -> (Action container obs -> obs)
   -> Index
-  -> Part model container action obs a
+  -> Instance model container action obs a
 
-instance view update get set lift model0 id = 
+instance view update get set model0 lift id = 
   embedIndexed view update get set model0 id 
     |> instance' lift 
 
@@ -346,11 +346,11 @@ instance1
   -> Update model action
   -> (container -> Maybe model)
   -> (Maybe model -> container -> container)
-  -> (Action container obs -> obs)
   -> model
-  -> Part model container action obs a
+  -> (Action container obs -> obs)
+  -> Instance model container action obs a
 
-instance1 view update get set lift model0 = 
+instance1 view update get set model0 lift = 
   embed view update (get >> Maybe.withDefault model0) (Just >> set)
     |> instance' lift 
 

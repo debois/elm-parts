@@ -5,7 +5,7 @@ import Html.Attributes exposing (style)
 import Html.Events exposing (onClick)
 import Effects exposing (Effects)
 
-import Parts exposing (Indexed, Part)
+import Parts exposing (Indexed, Instance)
 
 
 -- MODEL
@@ -61,19 +61,19 @@ update' action =
   update action >> (\model -> (model, Effects.none))
 
 
-type alias Part container obs = 
-  Parts.Part Model container Action obs Html
+type alias Instance container obs = 
+  Parts.Instance Model container Action obs Html
 
 
-part
-    : Parts.Index
-    -> (Parts.Action (Container c) obs -> obs)
-    -> Model
-    -> Part (Container c) obs
-part = 
+instance
+    : (Parts.Action (Container c) obs -> obs)
+    -> Parts.Index
+    -> Instance (Container c) obs
+instance = 
   Parts.instance 
     view update'
     .counter (\x m -> {m | counter = x})
+    0
 
 
 onChange : (Action -> a) -> Action -> Maybe a

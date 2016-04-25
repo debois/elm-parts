@@ -31,14 +31,14 @@ update action model =
 
 -- VIEW
 
-counter0 : Counter.Part Model Action
+counter0 : Counter.Instance Model Action
 counter0 = 
-  Counter.part [0] PartAction 0
+  Counter.instance PartAction [0] 
 
 
-counter1 : Counter.Part Model Action
+counter1 : Counter.Instance Model Action
 counter1 =
-  Counter.part [1] PartAction 0 
+  Counter.instance PartAction [1] 
 
 
 view : Signal.Address Action -> Model -> Html 
