@@ -1,44 +1,56 @@
-module Counter where
+module Counter exposing (Model, init, Msg, update, view, render, find)
 
 import Html exposing (..)
-import Html.Attributes exposing (style)
+import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
-import Effects exposing (Effects)
 
-import Parts exposing (Indexed, Instance)
+import Parts exposing (Indexed)
 
 
 -- MODEL
 
-type alias Model = Int
+
+type alias Model 
+  = Int
+
+
+init : Int -> Model
+init count =
+  count
 
 
 -- UPDATE
 
-type Action = Increment | Decrement
 
-update : Action -> Model -> Model
-update action model =
-  case action of
+type Msg
+  = Increment
+  | Decrement
+
+
+update : Msg -> Model -> (Model, Cmd Msg)
+update msg model =
+  case msg of
     Increment ->
-      model + 1
+      (model + 1, Cmd.none)
 
     Decrement ->
-      model - 1
+      (model - 1, Cmd.none)
 
 
 -- VIEW
 
-view : Signal.Address Action -> Model -> Html
-view address model =
-  div []
-    [ button [ onClick address Decrement ] [ text "-" ]
+
+view : (Msg -> m) -> Model -> Html m
+view lift model =
+  div 
+    []
+    [ button [ onClick (lift Decrement) ] [ text "-" ] 
     , div [ countStyle ] [ text (toString model) ]
-    , button [ onClick address Increment ] [ text "+" ]
+    , button [ onClick (lift Increment) ] [ text "+" ] 
     ]
 
 
-countStyle : Attribute
+countStyle : Attribute msg
 countStyle =
   style
     [ ("font-size", "20px")
@@ -51,34 +63,21 @@ countStyle =
 
 -- PART
 
+
 type alias Container c = 
   { c | counter : Indexed Model }
 
 
--- Parts expect TEA components to have effects. 
-update' : Parts.Update Model Action 
-update' action = 
-  update action >> (\model -> (model, Effects.none))
+set : Parts.Set (Indexed Model) (Container c) 
+set x y = 
+  { y | counter = x }
 
 
-type alias Instance container obs = 
-  Parts.Instance Model container Action obs Html
+render : (Parts.Msg (Container c) -> m) -> Parts.Index -> Container c -> Html m
+render = 
+  Parts.create view update .counter set (init 0)
 
 
-instance
-    : (Parts.Action (Container c) obs -> obs)
-    -> Parts.Index
-    -> Instance (Container c) obs
-instance = 
-  Parts.instance 
-    view update'
-    .counter (\x m -> {m | counter = x})
-    0
-
-
-onChange : (Action -> a) -> Action -> Maybe a
-onChange f action = 
-  Just (f action)
-  
-
-  
+find : Parts.Index -> Parts.Accessors Model (Container c) 
+find = 
+  Parts.accessors .counter set (init 0)

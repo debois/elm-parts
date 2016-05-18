@@ -1,75 +1,101 @@
-module Parts
-  ( embed, embedIndexed, Embedding, Observer
-  , View, Update, Index, Indexed
-  , Instance, instance, instance1
-  , update
-  , Action
-  ) where
+module Parts exposing 
+  ( Update, View
+  , Get, Set, embedView, embedUpdate
+  , Index, Indexed, indexed
+  , Msg
+  , update, create, create1, accessors, Accessors
+  )
 
 {-| 
+
+Given a TEA component with model type `model` and message type `msg`, we construct
+a variant component which knows how to extract its model from a c model
+`c` and produces generic messages `Msg c`. The consuming component is assumed
+to have message type `obs` (for "observation"). 
 
 # Elm Architecture types
 @docs Update, View
 
-# Embeddings 
-@docs Index, Indexed, Embedding, embed, embedIndexed
+# Model embeddings 
+@docs Get, Set, embedView, embedUpdate
+@docs accessors, Accessors
 
-# Instance construction
-@docs Action, Instance, Observer, instance, instance1
+## Indexed model embeddings
+@docs Index, Indexed, indexed
 
-# Instance consumption
-@docs update
+# Message embeddings
+@docs Msg, update
+
+# Part construction
+@docs create, create1
 
 -}
 
-import Effects exposing (Effects)
-import Task
+import Platform.Cmd exposing (Cmd)
 import Dict exposing (Dict)
-
 
 
 -- TYPES
 
 
-
 {-| Standard TEA update function type. 
 -}
-type alias Update model action = 
-  action -> model -> (model, Effects action)
-
-
-{-| Variant of TEA update function type, where effects may be 
-lifted to a different type. 
--}
-type alias Update' model action action' = 
-  action -> model -> (model, Effects action')
-
+type alias Update model msg = 
+  msg -> model -> (model, Cmd msg)
 
 
 {-| Standard TEA view function type. 
 -}
-type alias View model action a = 
-  Signal.Address action -> model -> a
+type alias View model a = 
+  model -> a
 
 
+-- EMBEDDINGS
 
--- EMBEDDING MODELS 
+
+{-| Type of "getter": fetch component model `m` from c model `c`. 
+-}
+type alias Get model c =
+  c -> model
 
 
-{-| An __index__ is used to identify instances of components. E.g., if
-  your app uses two instances of a button components, these instances need to
-  have distinct indices. 
-  
-  Rather than being simply integers, indexes are lists of integers.  This type
-  is convenient for dynamically generated components, where you do not
-  necessarily know the number of component instances up front. In this case,
-  give the ith component the index `[0,i]`. Remaining components of your app
-  can just use indices `[1]`, `[2]`, etc; the use of lists precludes accidental
-  re-use of instance ids. 
+{-| Type of "setter": update component model `m` in c `c`. 
+-}
+type alias Set model c = 
+  model -> c -> c
+
+
+{-| Lift a `view` to one which knows how to retrieve its `model` from 
+a c model `c`. 
+-}
+embedView : Get model c -> View model a -> View c a
+embedView get view = 
+  get >> view 
+
+
+{-| Lift an `update` from operating on `model` to a c model `c`. 
+-}
+embedUpdate : 
+    Get model c
+ -> Set model c
+ -> Update model msg
+ -> Update c msg
+embedUpdate get set update = 
+  \msg c -> 
+     update msg (get c) |> map1st (flip set c)
+
+
+-- INDEXED EMBEDDINGS
+
+ 
+{-| Type of indices. An index is a list of `Int` rather than just an `Int` to 
+support nested dynamically constructed elements: Use indices `[0]`, `[1]`, ...
+for statically known top-level components, then use `[0,0]`, `[0,1]`, ...
+for a dynamically generated list of components. 
 -}
 type alias Index 
   = List Int
-
+ 
 
 {-| Indexed families of things.
 -}
@@ -77,294 +103,165 @@ type alias Indexed a =
   Dict Index a 
 
 
-{-| An __embedding__ of an Elm Architecture component is a variant in which
-view and update functions know how to extract and update their model 
-from a larger master model. 
+{-| Fix a getter and setter for an `Indexed model` to a particular `Index`.
 -}
-type alias Embedding model container action a = 
-  { view : View container action a
-  , update : Update container action 
-  , getModel : container -> model
-  , setModel : model -> container -> container
-  }
- 
+indexed : 
+    Get (Indexed model) c
+ -> Set (Indexed model) c
+ -> model
+ -> Index
+ -> (Get model c, Set model c)
+indexed get set model0 idx =  
+  ( \c -> Dict.get idx (get c) |> Maybe.withDefault model0
+  , \model c -> set (Dict.insert idx model (get c)) c
+  )
+  
 
-{-| Embed a component. Third and fourth arguments are a getter (extract the 
-local model from the container) and a setter (update local model in the 
-container). 
+-- EMBEDDING MESSAGES
 
-It is instructive to compare the types of the view and update function in 
-the input and output:
 
-     {- Input -}                    {- Output -}
-     View model action a            View container action a
-     Update model action            Update container action 
+{-| Similar to how embeddings enable collecting models of different type
+in a single model c, we collect messages in a single "master
+message" type. Messages exist exclusively to be dispatched by a corresponding
+`update` function; we can avoid distinguishing between different types of 
+messages by dispatching not the `Msg` itself, but a partially applied update
+function `update msg`. 
 
+It's instructive to compare `Msg` to the type of `update` partially applied to 
+an actual carried message `m`:
+
+    update : m -> c -> (c, Cmd m)
+    (update m) : c -> (c, Cmd m)
 -}
-embed : 
-  View model action a ->               -- Given a view function, 
-  Update model action ->               -- an update function 
-  (container -> model) ->              -- a getter 
-  (model -> container -> container) -> -- a setter
-  Embedding model container action a   -- produce an Embedding. 
-
-embed view update get set = 
-  { view = 
-      \addr model -> view addr (get model)
-  , update = 
-      \action model -> 
-        update action (get model)
-          |> map1st (flip set model)
-  , getModel = get
-  , setModel = set
-  }
+type Msg c = 
+  Msg (c -> (c, Cmd (Msg c)))
 
 
-{-| We are interested in particular embeddings where components of the same
-type all have their state living inside a shared `Dict`; the individual
-component has a key used to look up its own state. 
+{-| Generic update function for Msg. 
 -}
-embedIndexed : 
-  View model action a ->                       -- Given a view function, 
-  Update model action ->                       -- an update function 
-  (container -> Indexed model) ->              -- a getter 
-  (Indexed model -> container -> container) -> -- a setter
-  model ->                                     -- an initial model for this part
-  Index ->                                     -- a part id 
-  Embedding model container action a           -- ... produce an Embedding.
-
-embedIndexed view update get set model0 id = 
-  let 
-    get' model = 
-      Dict.get id (get model) |> Maybe.withDefault model0
-
-    set' submodel model = 
-      set (Dict.insert id submodel (get model)) model 
-  in 
-    embed view update get' set' 
-
-
-
--- LIFTING ACTIONS
-
-
-
-{-| Similarly to how embeddings enable collecting models of different type
-in a single model container, we need to collect actions in a single "master
-action" type.  Obviously, actions need to be eventually executed by running
-the corresponding update function. To avoid this master action type explicitly
-representing the Action/update pairs of elm-mdl components, we represent an
-action of an individual component as a partially applied update function; that
-is, a function `container -> container`. E.g., the `Click` action of Button is
-conceptually represented as:
-
-    embeddedButton : Embedding Button.Model container action ...
-    embeddedButton = 
-      embedIndexed 
-        Button.view Button.update .button {\m x -> {m|button=x} Button.model 0
-
-    clickAction : container -> container 
-    clickAction = embeddedButton.update Button.click 
-
-When all components are embedded in the same `container` model, we 
-then have a uniform update mechanism. 
-
-We lost the ability to inspect the action when we did this, though. To be 
-able to react to some actions of a component, we add to our `container -> 
-container` type for actions a potential __observation__ of type `obs`. 
-In practice, this observation type `obs` will be the Action of the TEA
-component __hosting__ the sub-components. 
-
-Altogether, accounting also for effects, we arrive at the following type. 
--}
-type Action container obs = 
-  A (container -> (container, Effects (Action container obs), Maybe obs))
-
-
-{-| Type of observers, i.e., functions that take an actual action of the 
-underlying TEA component to an observation.  E.g., Button has an Observer for
-its `Click` action. 
--}
-type alias Observer action obs = 
-  action -> Maybe obs
-
-
-{-| Generic update function for Action. 
--}
-update : 
-  (Action container obs -> obs) ->      
-  Update' container (Action container obs) obs
-
-update fwd (A f) container = 
-  let 
-    (container', fx, obs) = 
-      f container
-        |> map2 (Effects.map fwd)
-  in 
-    case obs of 
-      Nothing -> 
-        (container', fx)
-
-      Just x -> 
-        (container', Effects.batch [ fx, Effects.task (Task.succeed x) ]) 
-
-
-
+update : (Msg c -> m) -> Msg c -> c -> ( c, Cmd m )  
+update fwd (Msg f) c = 
+  f c |> map2nd (Cmd.map fwd)
+  
 
 -- PARTS
 
 
-type alias Observers action obs = 
-  List (Observer action obs)
-
-
-
-{-| Type of parts. A part contains a view, 
-get/set/map for the inner model, and a forwarder lifting component 
-actions to observations. 
+{-| Partially apply an `update` function to a `msg`, producing a generic Msg.
 -}
-type alias Instance model container action obs a = 
-  { view : Observers action obs -> View container obs a
-  , get : container -> model
-  , set : model -> container -> container
-  , map : (model -> model) -> container -> container
+pack : (Update c msg) -> msg -> Msg c 
+pack upd msg = 
+  Msg (upd msg >> map2nd (Cmd.map (pack upd)))
+
+
+{-| From `update` and `view` functions, produce a `view` function which (a) 
+fetches its model from a `c` model, and (b) dispatches generic `Msg`
+messages. 
+
+Its instructive to compare the types of the input `view` and `update` for a 
+typical case. Notice that `create` transforms `model` -> `c` and
+`Html m` -> `Html (Msg c)`. 
+
+  {- Input -}
+  view : (m -> obs) -> model -> List (Attributes m) -> List (Html m) -> Html m
+  update : m -> model -> (model, Cmd m)
+
+  {- Output -}
+  type alias m' = Msg c
+  view : c -> List (Attributes m') -> List (Html m') -> Html m'
+
+Note that the input `view` function is assumed to take a function lifting its
+messages. 
+
+-}
+create 
+  : ((m -> obs) -> View model a)
+ -> Update model m
+ -> Get (Indexed model) c
+ -> Set (Indexed model) c
+ -> model 
+ -> (Msg c -> obs)
+ -> Index
+ -> View c a
+create view update get0 set0 model0 f idx  = 
+  let
+    (get, set) = 
+      indexed get0 set0 model0 idx
+
+    embeddedUpdate = 
+      embedUpdate get set update
+
+    embeddedView = 
+      embedView get <| view (pack embeddedUpdate >> f) 
+  in
+    embeddedView
+
+
+{-| Like `create`, but for components that are assumed to have only one
+instance.
+-}
+create1
+  : ((msg -> obs) -> View model a)
+ -> Update model msg
+ -> Get model c
+ -> Set model c
+ -> (Msg c -> obs)
+ -> View c a
+
+create1 view update get set f = 
+  let
+    embeddedUpdate = 
+      embedUpdate get set update
+
+    embeddedView = 
+      embedView get <| view (pack embeddedUpdate >> f)
+  in
+    embeddedView
+
+
+{-| For components where consumers do care about the model of the 
+component, use the `accessors` function below to generate suitable, 
+well, accessors.
+-}
+type alias Accessors model c = 
+  { get : Get model c
+  , set : Set model c
+  , map : (model -> model) -> c -> c
+  , reset : c -> c
   }
 
 
-{- TEA update function variant where running the function
-produces not just a new model and an effect, but also an 
-observation.
+{-| Generate accessors.
 -}
-type alias Step model action obs =
-  action -> model -> (model, Effects action, Maybe obs)
-  
+accessors 
+  : Get (Indexed model) c
+ -> Set (Indexed model) c
+ -> model 
+ -> Index
+ -> Accessors model c
 
-{- Partially apply a step function to an action, producing a generic Action.
--}
-pack : (Step model action obs) -> action -> Action model obs
-pack update action = 
-  A (update action >> map2 (Effects.map (pack update))) 
-
-
-{- Convert an update function to a step function by applying a 
-function that converts the action input to the update function into
-an observation.
--}
-observe : Observer action obs -> Update model action -> Step model action obs
-observe f update action =
-  update action >> (\(model', effects) -> (model', effects, f action))
-
-
-{- Return the first non-Nothing value in the list, or Nothing if no such
-exists.
--}
-pick : (a -> Maybe b) -> List a -> Maybe b
-pick f xs = 
-  case xs of 
-    [] -> Nothing 
-    x :: xs' -> 
-      case f x of 
-        Nothing -> pick f xs' 
-        x -> x
-
-
-{- Promote a list of Observers to a single Observer by picking, for a given
-action, the first one that succeeds. 
--}
-connect : List (Observer action obs) -> Observer action obs
-connect observers subaction = 
-  pick ((|>) subaction) observers
-
-
-{-| Given a lifting function, a list of observers and an embedding, construct a 
-Instance. 
--}
-instance'
-  : (Action container obs -> obs) 
-  -> Embedding model container action a 
-  -> Instance model container action obs a
-instance' lift embedding = 
-  let 
-    fwd observers = 
-      pack (observe (connect observers) embedding.update) >> lift
-    get = 
-      embedding.getModel
-    set = 
-      embedding.setModel
+accessors get0 set0 model0 idx = 
+  let
+    (get, set) =
+      indexed get0 set0 model0 idx
   in
-    { view = \observers addr -> embedding.view (Signal.forwardTo addr (fwd observers)) 
-    , get = get
+    { get = get
     , set = set
-    , map = \f model -> set (f (get model)) model
+    , map = \f c -> get c |> f |> flip set c
+    , reset = \c -> get0 c |> Dict.remove idx |> (\m -> set0 m c)
     }
 
 
-
-{-| It is helpful to see parameter names: 
-
-  instance view update get set id lift model0 observers = 
-      ...
-
-Convert a regular Elm Architecture component (`view`, `update`) to a part, 
-i.e., a component which knows how to access its model inside a generic
-container model (`get`, `set`), and which dispatches generic `Action` updates,
-lifted to the consumers action type `obs` (`lift`). You can react to actions in
-custom way by providing observers (`observers`). You must also provide an
-initial model (`model0`) and an identifier for the part (`id`). The
-identifier must be unique for all parts of the same type stored in the
-same model (overapproximating rule of thumb: if they are in the same file,
-they need distinct ids.)
-
-Its instructive to compare the types of the input and output views:
-
-    {- Input -}                 {- Output -}
-    View model action a         View container obs a
-
-That is, this function fully converts a view from its own `model` and `action`
-to the master `container` model and `observation` action. 
--}
-instance
-  : View model action a
-  -> Update model action
-  -> (container -> Indexed model)
-  -> (Indexed model -> container -> container)
-  -> model
-  -> (Action container obs -> obs)
-  -> Index
-  -> Instance model container action obs a
-
-instance view update get set model0 lift id = 
-  embedIndexed view update get set model0 id 
-    |> instance' lift 
-
-
-{-| Variant of `instance` for parts that will be used only once in any given
-TEA component. 
--}
-instance1
- : View model action a
-  -> Update model action
-  -> (container -> Maybe model)
-  -> (Maybe model -> container -> container)
-  -> model
-  -> (Action container obs -> obs)
-  -> Instance model container action obs a
-
-instance1 view update get set model0 lift = 
-  embed view update (get >> Maybe.withDefault model0) (Just >> set)
-    |> instance' lift 
 
 
 -- HELPERS
 
 
-
-map2 : (b -> b') -> (a, b, c) -> (a, b', c)
-map2 f (x,y,z) = (x, f y, z)
-
-
 map1st : (a -> c) -> (a,b) -> (c,b)
 map1st f (x,y) = (f x, y)
 
+
+map2nd : (b -> c) -> (a,b) -> (a,c)
+map2nd f (x,y) = (x, f y)
 
 

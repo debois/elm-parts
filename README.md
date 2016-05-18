@@ -29,19 +29,13 @@ where the Counter is implemented as a part. To build, e.g., step 1:
     elm-make examples/1.elm
 
 Its instructive to see the diff between 
-[1.elm](https://github.com/debois/elm-parts/blob/master/examples/1.elm) (1 counter)
+[0-counter-part.elm](https://github.com/debois/elm-parts/blob/master/examples/1.elm) (1 counter)
 and
-[2.elm](https://github.com/debois/elm-parts/blob/master/examples/2.elm) (2 counters). It's just this: 
+[1-counter-pair-part.elm](https://github.com/debois/elm-parts/blob/master/examples/2.elm)
+(2 counters). It's just this: 
 ```patch
-    38a39,43
-    > counter1 : Counter.Part Model Action
-    > counter1 =
-    >   Counter.part 1 PartAction 0 [] 
-    > 
-    > 
-    43a49
-    >     , counter1.view addr model
+60a61
+>     , Counter.render CounterMsg [1] model
 ```
-
-That is, all you need to do is create an additional part (first change), then use
-it in your view-function (second part). 
+That is, additional instances of a single component requires __only__ changes where you use 
+render them, in your `view` function. 
