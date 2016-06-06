@@ -3,7 +3,7 @@ module Parts exposing
   , Get, Set, embedView, embedUpdate
   , Index, Indexed, indexed
   , Msg
-  , update, create, create1, accessors, Accessors
+  , pack, update, create, create1, accessors, Accessors
   )
 
 {-| 
@@ -250,6 +250,7 @@ accessors get0 set0 model0 idx =
     , map = \f c -> get c |> f |> flip set c
     , reset = \c -> get0 c |> Dict.remove idx |> (\m -> set0 m c)
     }
+
 
 
 
