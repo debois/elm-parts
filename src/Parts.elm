@@ -24,7 +24,7 @@ to have message type `obs` (for "observation").
 @docs Index, Indexed, indexed
 
 # Message embeddings
-@docs Msg, update
+@docs Msg, update, pack
 
 # Part construction
 @docs create, create1
