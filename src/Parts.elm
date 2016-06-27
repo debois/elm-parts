@@ -4,6 +4,7 @@ module Parts exposing
   , Index, Indexed, indexed
   , Msg
   , pack, update, create, create1, accessors, Accessors
+  , Update', pack', update', create1', embedUpdate'
   )
 
 {-| 
@@ -29,6 +30,32 @@ to have message type `obs` (for "observation").
 # Part construction
 @docs create, create1
 
+# Lazyness
+
+Recall that `Html.Lazy` avoids re-computing views when the model doesn't change
+across updates. However, "doesn't change" does not mean `model == model'` but rather
+the stricter `model === model'` (in Javascript terms). That is, the old and new model
+must not only be structurally the same, they must be literally the same
+data-structure in memory.  
+
+Parts generally do not achieve referential equality of no-op updates, since we
+are wrapping updates conceptually like this: 
+
+    let (submodel, submsgs) = SubComponent.update msg model.submodel 
+        model' = { model | submodel = submodel }
+    in 
+        ...
+In the second line, even if `submodel == model.submodel` and so `model ==
+model'`, we won't have (in Javascript terms) `model === model'`. 
+
+If you need lazy and thus referential equality of no-op updates, use 
+`update'` below instead of the regular `update`, and create your parts with 
+`create1'`, `pack'` etc. These functions all require that your base `update`
+function has the type of `Update'`, that is, wraps the resulting model in 
+`Maybe` and explicitly signals a no-op by returning a `Nothing` model. 
+
+@docs Update', update', create1', pack', embedUpdate'
+
 -}
 
 import Platform.Cmd exposing (Cmd)
@@ -48,6 +75,16 @@ type alias Update model msg =
 -}
 type alias View model a = 
   model -> a
+
+
+{-| TEA update function with explicit no-op. You should have:
+
+    fst (update msg model) == Nothing       -- No change to model
+    fst (update msg model) == Just model'   -- Change to model'
+
+-}
+type alias Update' model msg = 
+  msg -> model -> (Maybe model, Cmd msg)
 
 
 -- EMBEDDINGS
@@ -73,7 +110,7 @@ embedView get view =
   get >> view 
 
 
-{-| Lift an `update` from operating on `model` to a c model `c`. 
+{-| Lift an `Update` from operating on `model` to a c model `c`. 
 -}
 embedUpdate : 
     Get model c
@@ -83,6 +120,20 @@ embedUpdate :
 embedUpdate get set update = 
   \msg c -> 
      update msg (get c) |> map1st (flip set c)
+
+
+{-| Lift an explicit no-op `Update'` from operating on `model` to a c model `c`. 
+-}
+embedUpdate' :
+    Get model c
+ -> Set model c
+ -> Update' model msg
+ -> Update' c msg
+embedUpdate' get set update = 
+  \msg c -> 
+    update msg (get c) 
+      |> map1st (Maybe.map (\x -> set x c))
+
 
 
 -- INDEXED EMBEDDINGS
@@ -109,11 +160,10 @@ indexed :
     Get (Indexed model) c
  -> Set (Indexed model) c
  -> model
- -> Index
- -> (Get model c, Set model c)
-indexed get set model0 idx =  
-  ( \c -> Dict.get idx (get c) |> Maybe.withDefault model0
-  , \model c -> set (Dict.insert idx model (get c)) c
+ -> (Index -> Get model c, Index -> Set model c)
+indexed get set model0 =  
+  ( \idx c -> Dict.get idx (get c) |> Maybe.withDefault model0
+  , \idx model c -> set (Dict.insert idx model (get c)) c
   )
   
 
@@ -134,24 +184,48 @@ an actual carried message `m`:
     (update m) : c -> (c, Cmd m)
 -}
 type Msg c = 
-  Msg (c -> (c, Cmd (Msg c)))
+  Msg (c -> (Maybe c, Cmd (Msg c)))
 
 
-{-| Generic update function for Msg. 
+{-| Generic update function for `Msg`. 
 -}
 update : (Msg c -> m) -> Msg c -> c -> ( c, Cmd m )  
 update fwd (Msg f) c = 
-  f c |> map2nd (Cmd.map fwd)
+  f c 
+    |> map1st (Maybe.withDefault c)
+    |> map2nd (Cmd.map fwd)
+  
+
+{-| Generic explict no-op update function for `Msg`. 
+-}
+update' : (Msg c -> m) -> Msg c -> c -> ( Maybe c, Cmd m )  
+update' fwd (Msg f) c = 
+  f c 
+    |> map2nd (Cmd.map fwd)
   
 
 -- PARTS
 
 
-{-| Partially apply an `update` function to a `msg`, producing a generic Msg.
+{-| Partially apply an `Update` function to a `msg`, producing a generic Msg.
 -}
 pack : (Update c msg) -> msg -> Msg c 
 pack upd msg = 
-  Msg (upd msg >> map2nd (Cmd.map (pack upd)))
+  Msg (\c -> 
+    upd msg c 
+      |> map1st Just
+      |> map2nd (Cmd.map (pack upd)))
+
+
+{-| Partially apply an explicit no-op `Update'` function to a `msg`, producing
+a generic Msg.
+-}
+pack' : (a -> b -> ( Maybe b, Cmd a )) -> a -> Msg b
+pack' upd msg = 
+  Msg (\c -> 
+    upd msg c 
+      |> map2nd (Cmd.map (pack' upd)))
+
 
 
 {-| From `update` and `view` functions, produce a `view` function which (a) 
@@ -183,18 +257,16 @@ create
  -> (Msg c -> obs)
  -> Index
  -> View c a
-create view update get0 set0 model0 f idx  = 
+create view update get0 set0 model0 = 
   let
     (get, set) = 
-      indexed get0 set0 model0 idx
+      indexed get0 set0 model0 
 
-    embeddedUpdate = 
-      embedUpdate get set update
-
-    embeddedView = 
-      embedView get <| view (pack embeddedUpdate >> f) 
+    embeddedUpdate idx = 
+      embedUpdate (get idx) (set idx) update
   in
-    embeddedView
+    \f idx c -> 
+      (view (pack (embeddedUpdate idx) >> f)) (get idx c) 
 
 
 {-| Like `create`, but for components that are assumed to have only one
@@ -208,15 +280,32 @@ create1
  -> (Msg c -> obs)
  -> View c a
 
-create1 view update get set f = 
+create1 view update get set = 
   let
     embeddedUpdate = 
       embedUpdate get set update
-
-    embeddedView = 
+  in 
+    \f -> 
       embedView get <| view (pack embeddedUpdate >> f)
-  in
-    embeddedView
+
+
+{-| Like `create1`, but for explicit no-op update functions. 
+-}
+create1'
+  : ((msg -> obs) -> View model a)
+ -> Update' model msg
+ -> Get model c
+ -> Set model c
+ -> (Msg c -> obs)
+ -> View c a
+
+create1' view upd' get set = 
+  let
+    embeddedUpdate = 
+      embedUpdate' get set upd'
+  in 
+    \f -> 
+      embedView get <| view (pack' embeddedUpdate >> f)
 
 
 {-| For components where consumers do care about the model of the 
@@ -243,16 +332,13 @@ accessors
 accessors get0 set0 model0 idx = 
   let
     (get, set) =
-      indexed get0 set0 model0 idx
+      indexed get0 set0 model0 
   in
-    { get = get
-    , set = set
-    , map = \f c -> get c |> f |> flip set c
+    { get = get idx
+    , set = set idx
+    , map = \f c -> (get idx) c |> f |> flip (set idx) c
     , reset = \c -> get0 c |> Dict.remove idx |> (\m -> set0 m c)
     }
-
-
-
 
 
 -- HELPERS
