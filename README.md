@@ -26,16 +26,16 @@ contains the first two steps of the
 [Elm Architecture Tutorial](https://github.com/evancz/elm-architecture-tutorial)
 where the Counter is implemented as a part. To build, e.g., step 1:
 
-    elm-make examples/1.elm
+    elm-make examples/0-counter-part.elm
 
 Its instructive to see the diff between 
-[0-counter-part.elm](https://github.com/debois/elm-parts/blob/master/examples/1.elm) (1 counter)
+[0-counter-part.elm](https://github.com/debois/elm-parts/blob/master/examples/0-counter-part.elm) (1 counter)
 and
-[1-counter-pair-part.elm](https://github.com/debois/elm-parts/blob/master/examples/2.elm)
+[1-counter-pair-part.elm](https://github.com/debois/elm-parts/blob/master/examples/1-counter-pair-part.elm)
 (2 counters). It's just this: 
 ```patch
 60a61
 >     , Counter.render CounterMsg [1] model
 ```
-That is, additional instances of a single component requires __only__ changes where you use 
+That is, additional instances of a single component require changes __only__ where you 
 render them, in your `view` function. 
