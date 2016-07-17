@@ -62,8 +62,6 @@ view : Model -> Html Msg
 view model =
   div
     []
-    [ Counter.view CounterMsg model.counter
-      -- We avoid Html.App.map because of
-      -- https://github.com/elm-lang/html/issues/16
+    [ App.map CounterMsg (Counter.view model.counter)
     , button [ onClick Reset ] [ text "RESET" ]
     ]

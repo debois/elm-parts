@@ -93,4 +93,4 @@ view model =
 
 viewCounter : (ID, Counter.Model) -> Html Msg
 viewCounter (id, model) =
-  Counter.view (Modify id) model
+  App.map (Modify id) (Counter.view model)

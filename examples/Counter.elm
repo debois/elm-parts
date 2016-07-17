@@ -1,6 +1,7 @@
 module Counter exposing (Model, init, Msg, update, view, render, find)
 
 import Html exposing (..)
+import Html.App as App
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
 
@@ -40,13 +41,13 @@ update msg model =
 -- VIEW
 
 
-view : (Msg -> m) -> Model -> Html m
-view lift model =
+view : Model -> Html Msg
+view model =
   div 
     []
-    [ button [ onClick (lift Decrement) ] [ text "-" ] 
+    [ button [ onClick Decrement ] [ text "-" ] 
     , div [ countStyle ] [ text (toString model) ]
-    , button [ onClick (lift Increment) ] [ text "+" ] 
+    , button [ onClick Increment ] [ text "+" ] 
     ]
 
 
@@ -75,7 +76,7 @@ set x y =
 
 render : (Parts.Msg (Container c) -> m) -> Parts.Index -> Container c -> Html m
 render = 
-  Parts.create view update .counter set (init 0)
+  Parts.create (\lift -> App.map lift << view) update .counter set (init 0)
 
 
 find : Parts.Index -> Parts.Accessors Model (Container c) 

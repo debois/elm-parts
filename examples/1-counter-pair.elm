@@ -76,9 +76,7 @@ view : Model -> Html Msg
 view model =
   div
     []
-    [ Counter.view Top model.topCounter
-    , Counter.view Bottom model.bottomCounter
-      -- We avoid Html.App.map because of
-      -- https://github.com/elm-lang/html/issues/16
+    [ App.map Top (Counter.view model.topCounter)
+    , App.map Bottom (Counter.view model.bottomCounter)
     , button [ onClick Reset ] [ text "RESET" ]
     ]
