@@ -140,7 +140,7 @@ well, accessors.
 -}
 type alias Accessors model container = 
   { get : container -> model
-  , set : model -> container -> container
+  , set : container -> model -> container
   , map : (model -> model) -> container -> container
   , reset : container -> container
   }
@@ -153,7 +153,7 @@ use this data structure.
 type alias Collection model container =
   { empty : Indexed model
   , get : container -> Indexed model
-  , set : Indexed model -> container -> container
+  , set : container -> Indexed model -> container
   , map : (Index -> model -> model) -> container -> container
   , reset : container -> container
   }
@@ -169,14 +169,14 @@ type alias Collection model container =
 -}
 collection
   : (container -> (Indexed model))
- -> ((Indexed model) -> container -> container)
+ -> (container -> (Indexed model) -> container)
  -> Collection model container
 collection get set =
   { empty = Dict.empty
   , get = get
   , set = set
-  , map = \f c -> get c |> Dict.map f |> flip set c 
-  , reset = set Dict.empty
+  , map = \f c -> get c |> Dict.map f |> set c 
+  , reset = flip set Dict.empty
   }
 
 
@@ -196,15 +196,15 @@ accessors collection model0 idx =
     get container =
       Dict.get idx (collection.get container) |> Maybe.withDefault model0
 
-    set model container = 
-      collection.set (Dict.insert idx model (collection.get container)) container
+    set container model = 
+      collection.set container (Dict.insert idx model (collection.get container))
   in
     { get = get
     , set = set
-    , map = \f c -> get c |> f |> flip set c
+    , map = \f c -> get c |> f |> set c
     , reset = \c -> collection.get c 
                  |> Dict.remove idx 
-                 |> flip collection.set c
+                 |> collection.set c
     }
 
 
@@ -263,7 +263,7 @@ apply' update access wrapper (msg, idx) container =
     item = access idx
   in
     update msg (item.get container)
-      |> map1st (Maybe.map (flip item.set container) >> Maybe.withDefault container)
+      |> map1st (Maybe.map (item.set container) >> Maybe.withDefault container)
       |> map2nd (Cmd.map (\msg' -> wrapper (msg', idx)))
 
 
