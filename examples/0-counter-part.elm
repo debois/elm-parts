@@ -2,7 +2,7 @@ import Html exposing (Html, button, div, text)
 import Html.App as App
 import Html.Events exposing (onClick)
 
-import Counter
+import Counters exposing (Counters)
 
 
 main : Program Never
@@ -19,13 +19,13 @@ main =
 
 
 type alias Model =
-  { counters : Counter.Counters
+  { counters : Counters
   }
 
 
 init : (Model, Cmd Msg)
 init =
-  ( { counters = .empty Counter.all }
+  ( { counters = .empty Counters.all }
   , Cmd.none
   )
 
@@ -35,7 +35,7 @@ init =
 
 type Msg
   = Reset
-  | CounterMsg (Counter.Msg, Counter.ID)
+  | CounterMsg (Counters.Msg, Counters.ID)
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -45,7 +45,7 @@ update msg model =
       init
 
     CounterMsg msg' -> 
-      Counter.pass CounterMsg msg' model
+      Counters.pass CounterMsg msg' model
 
 
 -- VIEW
@@ -55,6 +55,6 @@ view : Model -> Html Msg
 view model =
   div
     []
-    [ Counter.render CounterMsg [0] model
+    [ Counters.render CounterMsg [0] model
     , button [ onClick Reset ] [ text "RESET" ]
     ]

@@ -2,7 +2,7 @@ import Html exposing (Html, button, div, text)
 import Html.App as App
 import Html.Events exposing (onClick)
 
-import Counter
+import Counters exposing (Counters)
 
 
 main : Program Never
@@ -19,7 +19,7 @@ main =
 
 
 type alias Model =
-  { counters : Counter.Counters
+  { counters : Counters
   , first : Int
   , last : Int
   }
@@ -27,7 +27,7 @@ type alias Model =
 
 init : Model
 init =
-  { counters = .empty Counter.all
+  { counters = .empty Counters.all
   , first = 0
   , last = -1
   }
@@ -39,12 +39,12 @@ init =
 type Msg
   = Insert
   | Remove
-  | CounterMsg (Counter.Msg, Counter.ID)
+  | CounterMsg (Counters.Msg, Counters.ID)
 
 
 reset : Int -> Model -> Model
 reset k model = 
-  .reset (Counter.find [k]) model
+  .reset (Counters.find [k]) model
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -61,7 +61,7 @@ update msg model =
       )
 
     CounterMsg msg' -> 
-      Counter.pass CounterMsg msg' model
+      Counters.pass CounterMsg msg' model
 
 
 -- VIEW
@@ -79,6 +79,6 @@ view model =
     counters =
       [model.first .. model.last]
         |> List.map 
-            (\idx -> Counter.render CounterMsg [idx] model) 
+            (\idx -> Counters.render CounterMsg [idx] model) 
   in
     div [] ([remove, insert] ++ counters)
