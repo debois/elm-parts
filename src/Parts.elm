@@ -1,5 +1,5 @@
 module Parts exposing 
-  ( Update, View
+  ( Update, View, collection, Collection
   , Index, Indexed, accessors, Accessors
   , Update', create, apply, apply'
   )
@@ -17,7 +17,7 @@ a variant component which knows how to extract its model from a container model
 @docs Update, View
 
 # Model embeddings
-@docs accessors, Accessors
+@docs accessors, Accessors, collection, Collection
 
 # Construction of viewable compononts
 @docs create
@@ -55,11 +55,13 @@ render
 render =
   create view find
 
-find 
-   : Index 
-  -> Accessors Model (Container c) 
-find = 
-  accessors .counters (\x y -> { y | counters = x }) init
+all : Collection Model (Container c)
+all = 
+  collection .counters (\x y -> { y | counters = x }) 
+
+find : Index -> Accessors Model (Container c)
+find =
+  accessors all (init 0)
 ~~~
 
 # Lazyness
@@ -132,7 +134,6 @@ type alias Update' model msg =
   msg -> model -> (Maybe model, Cmd msg)
 
 
-
 {-| For components where consumers do care about the model of the 
 component, use the `accessors` function below to generate suitable, 
 well, accessors.
@@ -145,31 +146,67 @@ type alias Accessors model container =
   }
 
 
+{-| A collection abstracting over all the instances of a component.
+If you want to apply an action to all the instances of a component,
+use this data structure.
+-}
+type alias Collection model container =
+  { empty : Indexed model
+  , get : container -> Indexed model
+  , set : Indexed model -> container -> container
+  , map : (Index -> model -> model) -> container -> container
+  , reset : container -> container
+  }
+
+
+
+{-| Construct a collection:
+
+    all : Collection Model (Container c)
+    all = 
+      collection .myField (\x y -> { y | myField = x }) 
+
+-}
+collection
+  : (container -> (Indexed model))
+ -> ((Indexed model) -> container -> container)
+ -> Collection model container
+collection get set =
+  { empty = Dict.empty
+  , get = get
+  , set = set
+  , map = \f c -> get c |> Dict.map f |> flip set c 
+  , reset = set Dict.empty
+  }
+
+
 {-| Generate accessors:
 
     find = 
-      accessors .myField (\x y -> { y | myField = x }) init
+      accessors all init
 
 -}
 accessors 
-  : (container -> (Indexed model))
- -> ((Indexed model) -> container -> container)
+  : Collection model container
  -> model
  -> Index
  -> Accessors model container
-accessors get0 set0 model0 idx =
+accessors collection model0 idx =
   let
     get container =
-      Dict.get idx (get0 container) |> Maybe.withDefault model0
+      Dict.get idx (collection.get container) |> Maybe.withDefault model0
 
     set model container = 
-      set0 (Dict.insert idx model (get0 container)) container
+      collection.set (Dict.insert idx model (collection.get container)) container
   in
     { get = get
     , set = set
     , map = \f c -> get c |> f |> flip set c
-    , reset = \c -> get0 c |> Dict.remove idx |> (\m -> set0 m c)
+    , reset = \c -> collection.get c 
+                 |> Dict.remove idx 
+                 |> flip collection.set c
     }
+
 
 {-| Create a viewable component.
 
@@ -209,6 +246,7 @@ apply
   -> container
   -> (container, Cmd outerMsg)
 apply update = apply' (\msg -> map1st Just << update msg)
+
 
 {-| `apply` for components, which `update` function returns the model as a Maybe,
     depending on whether it changed or not. See the comment on laziness above.

@@ -78,7 +78,7 @@ pass
   -> Container c
   -> (Container c, Cmd outerMsg)
 pass =
-  apply update find 
+  apply update find
 
 render 
    : ((Msg, Index) -> outerMsg) 
@@ -88,6 +88,10 @@ render
 render =
   create view find
 
+all : Collection Model (Container c)
+all = 
+  collection .counters (\x y -> { y | counters = x }) 
+
 find : Index -> Accessors Model (Container c) 
 find = 
-  accessors .counters (\x y -> { y | counters = x }) (init 0)
+  accessors all (init 0)

@@ -1,10 +1,8 @@
 import Html exposing (Html, button, div, text)
 import Html.App as App
 import Html.Events exposing (onClick)
-import Dict 
 
 import Counter
-import Parts exposing (Indexed)
 
 
 main : Program Never
@@ -29,7 +27,7 @@ type alias Model =
 
 init : Model
 init =
-  { counters = Dict.empty
+  { counters = .empty Counter.all
   , first = 0
   , last = -1
   }

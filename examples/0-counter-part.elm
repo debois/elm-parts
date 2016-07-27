@@ -1,7 +1,6 @@
 import Html exposing (Html, button, div, text)
 import Html.App as App
 import Html.Events exposing (onClick)
-import Dict
 
 import Counter
 
@@ -26,7 +25,7 @@ type alias Model =
 
 init : (Model, Cmd Msg)
 init =
-  ( { counters = Dict.empty }
+  ( { counters = .empty Counter.all }
   , Cmd.none
   )
 
