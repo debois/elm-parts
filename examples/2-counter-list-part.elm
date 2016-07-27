@@ -21,7 +21,7 @@ main =
 
 
 type alias Model =
-  { counter : Indexed Counter.Model 
+  { counters : Counter.Counters
   , first : Int
   , last : Int
   }
@@ -29,7 +29,7 @@ type alias Model =
 
 init : Model
 init =
-  { counter = Dict.empty
+  { counters = Dict.empty
   , first = 0
   , last = -1
   }
@@ -41,7 +41,7 @@ init =
 type Msg
   = Insert
   | Remove
-  | CounterMsg (Parts.Msg Model)
+  | CounterMsg (Counter.Msg, Counter.ID)
 
 
 reset : Int -> Model -> Model
@@ -63,7 +63,7 @@ update msg model =
       )
 
     CounterMsg msg' -> 
-      Parts.update CounterMsg msg' model
+      Counter.pass CounterMsg msg' model
 
 
 -- VIEW

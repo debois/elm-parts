@@ -1,10 +1,9 @@
 import Html exposing (Html, button, div, text)
 import Html.App as App
 import Html.Events exposing (onClick)
-import Dict 
+import Dict
 
 import Counter
-import Parts exposing (Indexed)
 
 
 main : Program Never
@@ -21,13 +20,13 @@ main =
 
 
 type alias Model =
-  { counter : Indexed Counter.Model 
+  { counters : Counter.Counters
   }
 
 
 init : (Model, Cmd Msg)
 init =
-  ( { counter = Dict.empty }
+  ( { counters = Dict.empty }
   , Cmd.none
   )
 
@@ -37,7 +36,7 @@ init =
 
 type Msg
   = Reset
-  | CounterMsg (Parts.Msg Model)
+  | CounterMsg (Counter.Msg, Counter.ID)
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -47,7 +46,7 @@ update msg model =
       init
 
     CounterMsg msg' -> 
-      Parts.update CounterMsg msg' model
+      Counter.pass CounterMsg msg' model
 
 
 -- VIEW
