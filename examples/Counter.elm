@@ -90,7 +90,8 @@ render =
 
 all : Collection Model (Container c)
 all = 
-  collection .counters (\x y -> { y | counters = x }) 
+  collection .counters (\container collection -> 
+                         { container | counters = collection }) 
 
 find : Index -> Accessors Model (Container c) 
 find = 
