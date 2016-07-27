@@ -1,11 +1,10 @@
-module Counter exposing (Model, init, Msg, update, view, render, find)
+module Counter exposing (..)
 
 import Html exposing (..)
-import Html.App as App
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
 
-import Parts exposing (Indexed)
+import Parts exposing (..)
 
 
 -- MODEL
@@ -62,23 +61,38 @@ countStyle =
     ]
 
 
--- PART
+-- Parts
 
+type alias ID =
+  Index
+
+type alias Counters = 
+  Indexed Model
 
 type alias Container c = 
-  { c | counter : Indexed Model }
+  { c | counters : Counters }
 
+pass 
+   : ((Msg, Index) -> outerMsg)
+  -> (Msg, Index)
+  -> Container c
+  -> (Container c, Cmd outerMsg)
+pass =
+  apply update find
 
-set : Parts.Set (Indexed Model) (Container c) 
-set x y = 
-  { y | counter = x }
+render 
+   : ((Msg, Index) -> outerMsg) 
+  -> Index
+  -> Container c
+  -> Html outerMsg
+render =
+  create view find
 
+all : Collection Model (Container c)
+all = 
+  collection .counters (\container collection -> 
+                         { container | counters = collection }) 
 
-render : (Parts.Msg (Container c) -> m) -> Parts.Index -> Container c -> Html m
-render = 
-  Parts.create (\lift -> App.map lift << view) update .counter set (init 0)
-
-
-find : Parts.Index -> Parts.Accessors Model (Container c) 
+find : Index -> Accessors Model (Container c) 
 find = 
-  Parts.accessors .counter set (init 0)
+  accessors all (init 0)
