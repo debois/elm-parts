@@ -46,7 +46,7 @@ update msg model =
     Reset ->
       init
 
-    ControlMsg msg' -> 
+    ControlMsg msg' ->
       Controls.pass ControlMsg msg' model
 
 
@@ -57,7 +57,7 @@ view : Model -> Html Msg
 view model =
   div
     []
-    [ Counters.render ControlMsg [0] model
+    [ Counters.render (ControlMsg << Controls.CounterMsg) [0] model.controls
     , button [ onClick Reset ] [ text "RESET" ]
-    , Help.render ControlMsg model
+    , Help.render (ControlMsg << Controls.HelpMsg) model.controls
     ]

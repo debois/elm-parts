@@ -195,11 +195,11 @@ accessors
  -> Accessors model container
 accessors collection model0 idx =
   let
-    get container =
-      Dict.get idx (collection.get container) |> Maybe.withDefault model0
+    get =
+      Maybe.withDefault model0 << Dict.get idx << collection.get
 
-    set container model = 
-      collection.set container (Dict.insert idx model (collection.get container))
+    set container model =
+      collection.set container <| Dict.insert idx model <| collection.get container
   in
     { empty = model0
     , get = get
