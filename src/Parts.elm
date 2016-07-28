@@ -2,6 +2,7 @@ module Parts exposing
   ( Update, View, collection, Collection
   , Index, Indexed, accessors, Accessors
   , Update', create, apply, apply'
+  , accessors1, create1, apply1, apply1'
   )
 
 {-| 
@@ -17,13 +18,13 @@ a variant component which knows how to extract its model from a container model
 @docs Update, View
 
 # Model embeddings
-@docs accessors, Accessors, collection, Collection
+@docs accessors, accessors1, Accessors, collection, Collection
 
 # Construction of viewable compononts
-@docs create
+@docs create, create1
 
 # Construction of message passing function
-@docs apply, apply'
+@docs apply, apply', apply1, apply1'
 
 # Design
 
@@ -139,7 +140,8 @@ component, use the `accessors` function below to generate suitable,
 well, accessors.
 -}
 type alias Accessors model container = 
-  { get : container -> model
+  { empty : model
+  , get : container -> model
   , set : container -> model -> container
   , map : (model -> model) -> container -> container
   , reset : container -> container
@@ -199,13 +201,34 @@ accessors collection model0 idx =
     set container model = 
       collection.set container (Dict.insert idx model (collection.get container))
   in
-    { get = get
+    { empty = model0
+    , get = get
     , set = set
     , map = \f c -> get c |> f |> set c
     , reset = \c -> collection.get c 
                  |> Dict.remove idx 
                  |> collection.set c
     }
+
+
+{-| Generate accessors for a component, that has only one instance.
+
+    instance = 
+      accessors1 .myField (\x y -> { y | myField = x }) init
+
+-}
+accessors1
+  : (container -> model)
+ -> (container -> model -> container)
+ -> model
+ -> Accessors model container
+accessors1 get set model0 =
+  { empty = model0
+  , get = get
+  , set = set
+  , map = \f c -> get c |> f |> set c
+  , reset = flip set model0
+  }
 
 
 {-| Create a viewable component.
@@ -226,6 +249,25 @@ create
   -> Html outerMsg
 create view access wrapper idx container = 
   App.map (\msg -> wrapper (msg, idx)) (view ((access idx).get container))
+
+
+{-| Create a viewable component, that has only one instance.
+
+    For your component:
+    render =
+      create1 view instance
+
+    In your main view:
+    Component.render ComponentMsg model
+-}
+create1
+   : View model innerMsg 
+  -> Accessors model container
+  -> (innerMsg -> outerMsg)
+  -> container
+  -> Html outerMsg
+create1 view instance wrapper = 
+  App.map wrapper << view << instance.get
 
 
 {-| Create a function, to pass messages down to your component 
@@ -265,6 +307,43 @@ apply' update access wrapper (msg, idx) container =
     update msg (item.get container)
       |> map1st (Maybe.map (item.set container) >> Maybe.withDefault container)
       |> map2nd (Cmd.map (\msg' -> wrapper (msg', idx)))
+
+
+{-| Create a function, to pass messages down to your component,
+ for a component, that has only one instance.
+
+    For your component:
+    pass =
+      apply1 update instance
+
+    In your main update:
+    ComponentMsg msg' -> 
+      Component.pass ComponentMsg msg' model
+-}
+apply1
+   : Update model innerMsg
+  -> Accessors model container
+  -> (innerMsg -> outerMsg)
+  -> innerMsg
+  -> container
+  -> (container, Cmd outerMsg)
+apply1 update = apply1' (\msg -> map1st Just << update msg)
+
+
+{-| `apply1` for components, which `update` function returns the model as a Maybe,
+    depending on whether it changed or not. See the comment on laziness above.
+-}
+apply1'
+   : Update' model innerMsg
+  -> Accessors model container
+  -> (innerMsg -> outerMsg)
+  -> innerMsg
+  -> container
+  -> (container, Cmd outerMsg)
+apply1' update instance wrapper msg container =
+  update msg (instance.get container)
+    |> map1st (Maybe.map (instance.set container) >> Maybe.withDefault container)
+    |> map2nd (Cmd.map wrapper)
 
 
 -- Helpers
