@@ -1,5 +1,6 @@
 
-import Counter
+import Counters
+import Help
 import Html exposing (Html, button, div, text)
 import Html.App as App
 import Html.Events exposing (onClick)
@@ -20,13 +21,16 @@ main =
 
 
 type alias Model =
-  { counter : Counter.Model
+  { counters : Counters.Model
+  , help : Help.Model
   }
 
 
 init : Int -> (Model, Cmd Msg)
 init x =
-  ( { counter = Counter.init x }
+  ( { counters = Counters.init x 
+    , help = Help.init
+    }
   , Cmd.none 
   )
 
@@ -37,7 +41,8 @@ init x =
 
 type Msg
   = Reset
-  | CounterMsg Counter.Msg
+  | CounterMsg Counters.Msg
+  | HelpMsg Help.Msg
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -49,10 +54,19 @@ update message model =
     CounterMsg msg ->
       let 
         (counter', cmd) = 
-          Counter.update msg model.counter 
+          Counters.update msg model.counters
       in
-        ( { model | counter = counter' }
+        ( { model | counters = counter' }
         , Cmd.map CounterMsg cmd
+        )
+    
+    HelpMsg msg ->
+      let 
+        (help', cmd) = 
+          Help.update msg model.help
+      in
+        ( { model | help = help' }
+        , Cmd.map HelpMsg cmd
         )
 
 -- VIEW
@@ -62,8 +76,7 @@ view : Model -> Html Msg
 view model =
   div
     []
-    [ Counter.view CounterMsg model.counter
-      -- We avoid Html.App.map because of
-      -- https://github.com/elm-lang/html/issues/16
+    [ App.map CounterMsg (Counters.view model.counters)
     , button [ onClick Reset ] [ text "RESET" ]
+    , App.map HelpMsg (Help.view model.help)
     ]

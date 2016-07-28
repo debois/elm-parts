@@ -1,10 +1,10 @@
 import Html exposing (Html, button, div, text)
 import Html.App as App
 import Html.Events exposing (onClick)
-import Dict 
 
-import Counter
-import Parts exposing (Indexed)
+import Counters exposing (Counters)
+import Help exposing (Help)
+import Controls exposing (Controls)
 
 
 main : Program Never
@@ -21,13 +21,13 @@ main =
 
 
 type alias Model =
-  { counter : Indexed Counter.Model 
+  { controls : Controls
   }
 
 
 init : (Model, Cmd Msg)
 init =
-  ( { counter = Dict.empty }
+  ( { controls = .empty Controls.instance }
   , Cmd.none
   )
 
@@ -37,7 +37,7 @@ init =
 
 type Msg
   = Reset
-  | CounterMsg (Parts.Msg Model)
+  | ControlMsg Controls.Msg
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -46,8 +46,8 @@ update msg model =
     Reset ->
       init
 
-    CounterMsg msg' -> 
-      Parts.update CounterMsg msg' model
+    ControlMsg msg' ->
+      Controls.pass ControlMsg msg' model
 
 
 -- VIEW
@@ -57,6 +57,7 @@ view : Model -> Html Msg
 view model =
   div
     []
-    [ Counter.render CounterMsg [0] model
+    [ Counters.render (ControlMsg << Controls.CounterMsg) [0] model.controls
     , button [ onClick Reset ] [ text "RESET" ]
+    , Help.render (ControlMsg << Controls.HelpMsg) model.controls
     ]

@@ -1,34 +1,69 @@
 module Parts exposing 
-  ( Update, View
-  , Get, Set, embedView, embedUpdate
-  , Index, Indexed, indexed
-  , Msg
-  , pack, update, create, create1, accessors, Accessors
-  , Update', pack', update', create1', embedUpdate'
+  ( Update, View, collection, Collection
+  , Index, Indexed, accessors, Accessors
+  , Update', create, apply, apply'
+  , accessors1, create1, apply1, apply1'
   )
 
 {-| 
 
 Given a TEA component with model type `model` and message type `msg`, we construct
-a variant component which knows how to extract its model from a c model
-`c` and produces generic messages `Msg c`. The consuming component is assumed
-to have message type `obs` (for "observation"). 
+a variant component which knows how to extract its model from a container model
+`container` and produces generic messages `Msg c`.
+
+## Indexed model embeddings
+@docs Index, Indexed
 
 # Elm Architecture types
 @docs Update, View
 
-# Model embeddings 
-@docs Get, Set, embedView, embedUpdate
-@docs accessors, Accessors
+# Model embeddings
+@docs accessors, accessors1, Accessors, collection, Collection
 
-## Indexed model embeddings
-@docs Index, Indexed, indexed
-
-# Message embeddings
-@docs Msg, update, pack
-
-# Part construction
+# Construction of viewable compononts
 @docs create, create1
+
+# Construction of message passing function
+@docs apply, apply', apply1, apply1'
+
+# Design
+
+We recommend you define the following for your component:
+(here for the counter component in the examples, do rename all counter-y names.)
+```
+type alias ID =                    -- Optional, this allows your users to avoid
+  Index                            -- the explicit import of Parts
+
+type alias Counters =              -- same here
+  Indexed Model
+
+type alias Container c =           -- A container. Please notice,
+  { c | counters : Counters }      -- that your users' Model needs an unused
+                                   -- field named `counters`.
+pass 
+   : ((Msg, Index) -> outerMsg)    -- A wrapping Msg provided by your users
+  -> (Msg, Index)
+  -> Container c
+  -> (Container c, Cmd outerMsg)
+pass =
+  apply update find
+
+render 
+   : ((Msg, Index) -> outerMsg) 
+  -> Index
+  -> Container c
+  -> Html outerMsg
+render =
+  create view find
+
+all : Collection Model (Container c)
+all = 
+  collection .counters (\x y -> { y | counters = x }) 
+
+find : Index -> Accessors Model (Container c)
+find =
+  accessors all (init 0)
+~~~
 
 # Lazyness
 
@@ -49,96 +84,20 @@ In the second line, even if `submodel == model.submodel` and so `model ==
 model'`, we won't have (in Javascript terms) `model === model'`. 
 
 If you need lazy and thus referential equality of no-op updates, use 
-`update'` below instead of the regular `update`, and create your parts with 
-`create1'`, `pack'` etc. These functions all require that your base `update`
+`apply'` below instead of the regular `apply`. This function requires that your base `update`
 function has the type of `Update'`, that is, wraps the resulting model in 
 `Maybe` and explicitly signals a no-op by returning a `Nothing` model. 
 
-@docs Update', update', create1', pack', embedUpdate'
+@docs Update', apply'
 
 -}
 
 import Platform.Cmd exposing (Cmd)
+import Html exposing (Html)
+import Html.App as App
 import Dict exposing (Dict)
 
 
--- TYPES
-
-
-{-| Standard TEA update function type. 
--}
-type alias Update model msg = 
-  msg -> model -> (model, Cmd msg)
-
-
-{-| Standard TEA view function type. 
--}
-type alias View model a = 
-  model -> a
-
-
-{-| TEA update function with explicit no-op. You should have:
-
-    fst (update msg model) == Nothing       -- No change to model
-    fst (update msg model) == Just model'   -- Change to model'
-
--}
-type alias Update' model msg = 
-  msg -> model -> (Maybe model, Cmd msg)
-
-
--- EMBEDDINGS
-
-
-{-| Type of "getter": fetch component model `m` from c model `c`. 
--}
-type alias Get model c =
-  c -> model
-
-
-{-| Type of "setter": update component model `m` in c `c`. 
--}
-type alias Set model c = 
-  model -> c -> c
-
-
-{-| Lift a `view` to one which knows how to retrieve its `model` from 
-a c model `c`. 
--}
-embedView : Get model c -> View model a -> View c a
-embedView get view = 
-  get >> view 
-
-
-{-| Lift an `Update` from operating on `model` to a c model `c`. 
--}
-embedUpdate : 
-    Get model c
- -> Set model c
- -> Update model msg
- -> Update c msg
-embedUpdate get set update = 
-  \msg c -> 
-     update msg (get c) |> map1st (flip set c)
-
-
-{-| Lift an explicit no-op `Update'` from operating on `model` to a c model `c`. 
--}
-embedUpdate' :
-    Get model c
- -> Set model c
- -> Update' model msg
- -> Update' c msg
-embedUpdate' get set update = 
-  \msg c -> 
-    update msg (get c) 
-      |> map1st (Maybe.map (\x -> set x c))
-
-
-
--- INDEXED EMBEDDINGS
-
- 
 {-| Type of indices. An index is a list of `Int` rather than just an `Int` to 
 support nested dynamically constructed elements: Use indices `[0]`, `[1]`, ...
 for statically known top-level components, then use `[0,0]`, `[0,1]`, ...
@@ -154,195 +113,240 @@ type alias Indexed a =
   Dict Index a 
 
 
-{-| Fix a getter and setter for an `Indexed model` to a particular `Index`.
+{-| Standard TEA update function type. 
 -}
-indexed : 
-    Get (Indexed model) c
- -> Set (Indexed model) c
- -> model
- -> (Index -> Get model c, Index -> Set model c)
-indexed get set model0 =  
-  ( \idx c -> Dict.get idx (get c) |> Maybe.withDefault model0
-  , \idx model c -> set (Dict.insert idx model (get c)) c
-  )
-  
-
--- EMBEDDING MESSAGES
+type alias Update model msg = 
+  msg -> model -> (model, Cmd msg)
 
 
-{-| Similar to how embeddings enable collecting models of different type
-in a single model c, we collect messages in a single "master
-message" type. Messages exist exclusively to be dispatched by a corresponding
-`update` function; we can avoid distinguishing between different types of 
-messages by dispatching not the `Msg` itself, but a partially applied update
-function `update msg`. 
-
-It's instructive to compare `Msg` to the type of `update` partially applied to 
-an actual carried message `m`:
-
-    update : m -> c -> (c, Cmd m)
-    (update m) : c -> (c, Cmd m)
+{-| Standard TEA view function type. 
 -}
-type Msg c = 
-  Msg (c -> (Maybe c, Cmd (Msg c)))
+type alias View model a = 
+  model -> Html a
 
 
-{-| Generic update function for `Msg`. 
--}
-update : (Msg c -> m) -> Msg c -> c -> ( c, Cmd m )  
-update fwd (Msg f) c = 
-  f c 
-    |> map1st (Maybe.withDefault c)
-    |> map2nd (Cmd.map fwd)
-  
+{-| TEA update function with explicit no-op. You should have:
 
-{-| Generic explict no-op update function for `Msg`. 
--}
-update' : (Msg c -> m) -> Msg c -> c -> ( Maybe c, Cmd m )  
-update' fwd (Msg f) c = 
-  f c 
-    |> map2nd (Cmd.map fwd)
-  
-
--- PARTS
-
-
-{-| Partially apply an `Update` function to a `msg`, producing a generic Msg.
--}
-pack : (Update c msg) -> msg -> Msg c 
-pack upd msg = 
-  Msg (\c -> 
-    upd msg c 
-      |> map1st Just
-      |> map2nd (Cmd.map (pack upd)))
-
-
-{-| Partially apply an explicit no-op `Update'` function to a `msg`, producing
-a generic Msg.
--}
-pack' : (a -> b -> ( Maybe b, Cmd a )) -> a -> Msg b
-pack' upd msg = 
-  Msg (\c -> 
-    upd msg c 
-      |> map2nd (Cmd.map (pack' upd)))
-
-
-
-{-| From `update` and `view` functions, produce a `view` function which (a) 
-fetches its model from a `c` model, and (b) dispatches generic `Msg`
-messages. 
-
-Its instructive to compare the types of the input `view` and `update` for a 
-typical case. Notice that `create` transforms `model` -> `c` and
-`Html m` -> `Html (Msg c)`. 
-
-  {- Input -}
-  view : (m -> obs) -> model -> List (Attributes m) -> List (Html m) -> Html m
-  update : m -> model -> (model, Cmd m)
-
-  {- Output -}
-  type alias m' = Msg c
-  view : c -> List (Attributes m') -> List (Html m') -> Html m'
-
-Note that the input `view` function is assumed to take a function lifting its
-messages. 
+    fst (update msg model) == Nothing       -- No change to model
+    fst (update msg model) == Just model'   -- Change to model'
 
 -}
-create 
-  : ((m -> obs) -> View model a)
- -> Update model m
- -> Get (Indexed model) c
- -> Set (Indexed model) c
- -> model 
- -> (Msg c -> obs)
- -> Index
- -> View c a
-create view update get0 set0 model0 = 
-  let
-    (get, set) = 
-      indexed get0 set0 model0 
-
-    embeddedUpdate idx = 
-      embedUpdate (get idx) (set idx) update
-  in
-    \f idx c -> 
-      (view (pack (embeddedUpdate idx) >> f)) (get idx c) 
-
-
-{-| Like `create`, but for components that are assumed to have only one
-instance.
--}
-create1
-  : ((msg -> obs) -> View model a)
- -> Update model msg
- -> Get model c
- -> Set model c
- -> (Msg c -> obs)
- -> View c a
-
-create1 view update get set = 
-  let
-    embeddedUpdate = 
-      embedUpdate get set update
-  in 
-    \f -> 
-      embedView get <| view (pack embeddedUpdate >> f)
-
-
-{-| Like `create1`, but for explicit no-op update functions. 
--}
-create1'
-  : ((msg -> obs) -> View model a)
- -> Update' model msg
- -> Get model c
- -> Set model c
- -> (Msg c -> obs)
- -> View c a
-
-create1' view upd' get set = 
-  let
-    embeddedUpdate = 
-      embedUpdate' get set upd'
-  in 
-    \f -> 
-      embedView get <| view (pack' embeddedUpdate >> f)
+type alias Update' model msg = 
+  msg -> model -> (Maybe model, Cmd msg)
 
 
 {-| For components where consumers do care about the model of the 
 component, use the `accessors` function below to generate suitable, 
 well, accessors.
 -}
-type alias Accessors model c = 
-  { get : Get model c
-  , set : Set model c
-  , map : (model -> model) -> c -> c
-  , reset : c -> c
+type alias Accessors model container = 
+  { empty : model
+  , get : container -> model
+  , set : container -> model -> container
+  , map : (model -> model) -> container -> container
+  , reset : container -> container
   }
 
 
-{-| Generate accessors.
+{-| A collection abstracting over all the instances of a component.
+If you want to apply an action to all the instances of a component,
+use this data structure.
+-}
+type alias Collection model container =
+  { empty : Indexed model
+  , get : container -> Indexed model
+  , set : container -> Indexed model -> container
+  , map : (Index -> model -> model) -> container -> container
+  , reset : container -> container
+  }
+
+
+
+{-| Construct a collection:
+
+    all : Collection Model (Container c)
+    all = 
+      collection .myField (\x y -> { y | myField = x }) 
+
+-}
+collection
+  : (container -> (Indexed model))
+ -> (container -> (Indexed model) -> container)
+ -> Collection model container
+collection get set =
+  { empty = Dict.empty
+  , get = get
+  , set = set
+  , map = \f c -> get c |> Dict.map f |> set c 
+  , reset = flip set Dict.empty
+  }
+
+
+{-| Generate accessors:
+
+    find = 
+      accessors all init
+
 -}
 accessors 
-  : Get (Indexed model) c
- -> Set (Indexed model) c
- -> model 
+  : Collection model container
+ -> model
  -> Index
- -> Accessors model c
-
-accessors get0 set0 model0 idx = 
+ -> Accessors model container
+accessors collection model0 idx =
   let
-    (get, set) =
-      indexed get0 set0 model0 
+    get =
+      Maybe.withDefault model0 << Dict.get idx << collection.get
+
+    set container model =
+      collection.set container <| Dict.insert idx model <| collection.get container
   in
-    { get = get idx
-    , set = set idx
-    , map = \f c -> (get idx) c |> f |> flip (set idx) c
-    , reset = \c -> get0 c |> Dict.remove idx |> (\m -> set0 m c)
+    { empty = model0
+    , get = get
+    , set = set
+    , map = \f c -> get c |> f |> set c
+    , reset = \c -> collection.get c 
+                 |> Dict.remove idx 
+                 |> collection.set c
     }
 
 
--- HELPERS
+{-| Generate accessors for a component, that has only one instance.
 
+    instance = 
+      accessors1 .myField (\x y -> { y | myField = x }) init
+
+-}
+accessors1
+  : (container -> model)
+ -> (container -> model -> container)
+ -> model
+ -> Accessors model container
+accessors1 get set model0 =
+  { empty = model0
+  , get = get
+  , set = set
+  , map = \f c -> get c |> f |> set c
+  , reset = flip set model0
+  }
+
+
+{-| Create a viewable component.
+
+    For your component:
+    render =
+      create view find
+
+    In your main view:
+    Component.render ComponentMsg [0] model
+-}
+create
+   : View model innerMsg 
+  -> (Index -> Accessors model container)
+  -> ((innerMsg, Index) -> outerMsg)
+  -> Index
+  -> container
+  -> Html outerMsg
+create view access wrapper idx container = 
+  App.map (\msg -> wrapper (msg, idx)) (view ((access idx).get container))
+
+
+{-| Create a viewable component, that has only one instance.
+
+    For your component:
+    render =
+      create1 view instance
+
+    In your main view:
+    Component.render ComponentMsg model
+-}
+create1
+   : View model innerMsg 
+  -> Accessors model container
+  -> (innerMsg -> outerMsg)
+  -> container
+  -> Html outerMsg
+create1 view instance wrapper = 
+  App.map wrapper << view << instance.get
+
+
+{-| Create a function, to pass messages down to your component 
+
+    For your component:
+    pass =
+      apply update find
+
+    In your main update:
+    ComponentMsg msg' -> 
+      Component.pass ComponentMsg msg' model
+-}
+apply
+   : Update model innerMsg
+  -> (Index -> Accessors model container)
+  -> ((innerMsg, Index) -> outerMsg)
+  -> (innerMsg, Index)
+  -> container
+  -> (container, Cmd outerMsg)
+apply update = apply' (\msg -> map1st Just << update msg)
+
+
+{-| `apply` for components, which `update` function returns the model as a Maybe,
+    depending on whether it changed or not. See the comment on laziness above.
+-}
+apply'
+   : Update' model innerMsg
+  -> (Index -> Accessors model container)
+  -> ((innerMsg, Index) -> outerMsg)
+  -> (innerMsg, Index)
+  -> container
+  -> (container, Cmd outerMsg)
+apply' update access wrapper (msg, idx) container =
+  let 
+    item = access idx
+  in
+    update msg (item.get container)
+      |> map1st (Maybe.map (item.set container) >> Maybe.withDefault container)
+      |> map2nd (Cmd.map (\msg' -> wrapper (msg', idx)))
+
+
+{-| Create a function, to pass messages down to your component,
+ for a component, that has only one instance.
+
+    For your component:
+    pass =
+      apply1 update instance
+
+    In your main update:
+    ComponentMsg msg' -> 
+      Component.pass ComponentMsg msg' model
+-}
+apply1
+   : Update model innerMsg
+  -> Accessors model container
+  -> (innerMsg -> outerMsg)
+  -> innerMsg
+  -> container
+  -> (container, Cmd outerMsg)
+apply1 update = apply1' (\msg -> map1st Just << update msg)
+
+
+{-| `apply1` for components, which `update` function returns the model as a Maybe,
+    depending on whether it changed or not. See the comment on laziness above.
+-}
+apply1'
+   : Update' model innerMsg
+  -> Accessors model container
+  -> (innerMsg -> outerMsg)
+  -> innerMsg
+  -> container
+  -> (container, Cmd outerMsg)
+apply1' update instance wrapper msg container =
+  update msg (instance.get container)
+    |> map1st (Maybe.map (instance.set container) >> Maybe.withDefault container)
+    |> map2nd (Cmd.map wrapper)
+
+
+-- Helpers
 
 map1st : (a -> c) -> (a,b) -> (c,b)
 map1st f (x,y) = (f x, y)
@@ -350,5 +354,3 @@ map1st f (x,y) = (f x, y)
 
 map2nd : (b -> c) -> (a,b) -> (a,c)
 map2nd f (x,y) = (x, f y)
-
-

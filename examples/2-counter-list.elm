@@ -1,4 +1,4 @@
-import Counter
+import Counters
 import Html exposing (..)
 import Html.App as App
 import Html.Events exposing (..)
@@ -19,7 +19,7 @@ main =
 
 
 type alias Model =
-    { counters : List ( ID, Counter.Model )
+    { counters : List ( ID, Counters.Model )
     , nextID : ID
     }
 
@@ -41,7 +41,7 @@ init =
 type Msg
   = Insert
   | Remove
-  | Modify ID Counter.Msg
+  | Modify ID Counters.Msg
 
 
 update : Msg -> Model -> Model
@@ -50,7 +50,7 @@ update msg model =
     Insert ->
       let
         newCounter =
-          ( model.nextID, Counter.init 0 )
+          ( model.nextID, Counters.init 0 )
 
         newCounters =
           model.counters ++ [ newCounter ]
@@ -64,7 +64,7 @@ update msg model =
       let
         updateCounter (counterID, counterModel) =
           if counterID == id then
-            (counterID, Counter.update counterMsg counterModel |> fst)
+            (counterID, Counters.update counterMsg counterModel |> fst)
 
           else
             (counterID, counterModel)
@@ -91,6 +91,6 @@ view model =
     div [] ([remove, insert] ++ counters)
 
 
-viewCounter : (ID, Counter.Model) -> Html Msg
+viewCounter : (ID, Counters.Model) -> Html Msg
 viewCounter (id, model) =
-  Counter.view (Modify id) model
+  App.map (Modify id) (Counters.view model)
