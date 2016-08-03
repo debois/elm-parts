@@ -73,9 +73,9 @@ set x y =
   { y | counter = x }
 
 
-render : (Parts.Msg (Container c) -> m) -> Parts.Index -> Container c -> Html m
+render : (Parts.Msg (Container c) m -> m) -> Parts.Index -> Container c -> Html m
 render = 
-  Parts.create view update .counter set (init 0)
+  Parts.create view (Parts.generalize update) .counter set (init 0)
 
 
 find : Parts.Index -> Parts.Accessors Model (Container c) 

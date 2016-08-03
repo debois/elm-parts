@@ -41,7 +41,7 @@ init =
 type Msg
   = Insert
   | Remove
-  | CounterMsg (Parts.Msg Model)
+  | CounterMsg (Parts.Msg Model Msg)
 
 
 reset : Int -> Model -> Model
@@ -63,7 +63,7 @@ update msg model =
       )
 
     CounterMsg msg' -> 
-      Parts.update CounterMsg msg' model
+      Parts.update msg' model
 
 
 -- VIEW

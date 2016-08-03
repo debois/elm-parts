@@ -37,7 +37,7 @@ init =
 
 type Msg
   = Reset
-  | CounterMsg (Parts.Msg Model)
+  | CounterMsg (Parts.Msg Model Msg)
 
 
 update : Msg -> Model -> (Model, Cmd Msg)
@@ -47,7 +47,7 @@ update msg model =
       init
 
     CounterMsg msg' -> 
-      Parts.update CounterMsg msg' model
+      Parts.update msg' model
 
 
 -- VIEW

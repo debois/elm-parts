@@ -3,8 +3,8 @@ module Parts exposing
   , Get, Set, embedView, embedUpdate
   , Index, Indexed, indexed
   , Msg
-  , pack, update, create, create1, accessors, Accessors
-  , Update', pack', update', create1', embedUpdate'
+  , partial, update, update', create, create1, accessors, Accessors
+  , generalize, pack, pack1
   )
 
 {-| 
@@ -13,22 +13,6 @@ Given a TEA component with model type `model` and message type `msg`, we constru
 a variant component which knows how to extract its model from a c model
 `c` and produces generic messages `Msg c`. The consuming component is assumed
 to have message type `obs` (for "observation"). 
-
-# Elm Architecture types
-@docs Update, View
-
-# Model embeddings 
-@docs Get, Set, embedView, embedUpdate
-@docs accessors, Accessors
-
-## Indexed model embeddings
-@docs Index, Indexed, indexed
-
-# Message embeddings
-@docs Msg, update, pack
-
-# Part construction
-@docs create, create1
 
 # Lazyness
 
@@ -48,43 +32,54 @@ are wrapping updates conceptually like this:
 In the second line, even if `submodel == model.submodel` and so `model ==
 model'`, we won't have (in Javascript terms) `model === model'`. 
 
-If you need lazy and thus referential equality of no-op updates, use 
-`update'` below instead of the regular `update`, and create your parts with 
-`create1'`, `pack'` etc. These functions all require that your base `update`
-function has the type of `Update'`, that is, wraps the resulting model in 
-`Maybe` and explicitly signals a no-op by returning a `Nothing` model. 
+For this reason, the result of `update` functions used in parts should be
+`Maybe (model, Cmd msg)` rather than the usual `(model, Cmd msg)`; the 
+`Nothing` case signifies a no-op. 
 
-@docs Update', update', create1', pack', embedUpdate'
+# Communicating to the parent component
 
+Because parts wrap messages in an opaque type, the parent component loses the
+ability to inspect and maybe react to messages of the part. We recover this 
+ability by requiring the `update` function to take as parameter a lifting 
+function which lifts the parts messages to that of its parent. 
+
+@docs Update, View
+
+# Model embeddings 
+@docs Get, Set, embedView, embedUpdate
+@docs accessors, Accessors
+
+## Indexed model embeddings
+@docs Index, Indexed, indexed
+
+# Message embeddings
+@docs Msg, update, update', partial
+
+# Part construction
+@docs create, create1, generalize, pack, pack1
 -}
 
-import Platform.Cmd exposing (Cmd)
 import Dict exposing (Dict)
 
 
 -- TYPES
 
 
-{-| Standard TEA update function type. 
+{-| Update functions. 
+
+TEA update function with explicit message lifting and no-op. You should have:
+
+    fst (update f msg model) == Nothing       -- No change to model
+    fst (update f msg model) == Just model'   -- Change to model'
 -}
-type alias Update model msg = 
-  msg -> model -> (model, Cmd msg)
+type alias Update model msg obs = 
+  (msg -> obs) -> msg -> model -> Maybe (model, Cmd obs)
 
 
 {-| Standard TEA view function type. 
 -}
 type alias View model a = 
   model -> a
-
-
-{-| TEA update function with explicit no-op. You should have:
-
-    fst (update msg model) == Nothing       -- No change to model
-    fst (update msg model) == Just model'   -- Change to model'
-
--}
-type alias Update' model msg = 
-  msg -> model -> (Maybe model, Cmd msg)
 
 
 -- EMBEDDINGS
@@ -115,25 +110,12 @@ embedView get view =
 embedUpdate : 
     Get model c
  -> Set model c
- -> Update model msg
- -> Update c msg
+ -> Update model msg obs
+ -> Update c msg obs
 embedUpdate get set update = 
-  \msg c -> 
-     update msg (get c) |> map1st (flip set c)
-
-
-{-| Lift an explicit no-op `Update'` from operating on `model` to a c model `c`. 
--}
-embedUpdate' :
-    Get model c
- -> Set model c
- -> Update' model msg
- -> Update' c msg
-embedUpdate' get set update = 
-  \msg c -> 
-    update msg (get c) 
-      |> map1st (Maybe.map (\x -> set x c))
-
+  \f msg c -> 
+     update f msg (get c) 
+       |> Maybe.map (map1st <| flip set c)
 
 
 -- INDEXED EMBEDDINGS
@@ -183,48 +165,69 @@ an actual carried message `m`:
     update : m -> c -> (c, Cmd m)
     (update m) : c -> (c, Cmd m)
 -}
-type Msg c = 
-  Msg (c -> (Maybe c, Cmd (Msg c)))
+type Msg c obs = 
+  Msg (c -> Maybe (c, Cmd obs))
 
-
-{-| Generic update function for `Msg`. 
--}
-update : (Msg c -> m) -> Msg c -> c -> ( c, Cmd m )  
-update fwd (Msg f) c = 
-  f c 
-    |> map1st (Maybe.withDefault c)
-    |> map2nd (Cmd.map fwd)
-  
 
 {-| Generic explict no-op update function for `Msg`. 
 -}
-update' : (Msg c -> m) -> Msg c -> c -> ( Maybe c, Cmd m )  
-update' fwd (Msg f) c = 
+update' : Msg c obs -> c -> Maybe (c, Cmd obs)  
+update' (Msg f) c = 
   f c 
-    |> map2nd (Cmd.map fwd)
   
+
+{-| Generic update function for `Msg`. 
+-}
+update : Msg c obs -> c -> (c, Cmd obs)  
+update (Msg f) c = 
+  f c |> Maybe.withDefault (c, Cmd.none)
+    
+  
+
 
 -- PARTS
 
 
-{-| Partially apply an `Update` function to a `msg`, producing a generic Msg.
--}
-pack : (Update c msg) -> msg -> Msg c 
-pack upd msg = 
-  Msg (\c -> 
-    upd msg c 
-      |> map1st Just
-      |> map2nd (Cmd.map (pack upd)))
-
-
-{-| Partially apply an explicit no-op `Update'` function to a `msg`, producing
+{-| Partially apply an `Update` function to a `msg`, producing
 a generic Msg.
 -}
-pack' : (a -> b -> ( Maybe b, Cmd a )) -> a -> Msg b
-pack' upd msg = 
+partial : (Msg c obs -> obs) -> Update c msg obs -> msg -> Msg c obs
+partial fwd upd msg = 
   Msg (\c -> 
-    upd msg c 
-      |> map2nd (Cmd.map (pack' upd)))
+    upd (partial fwd upd >> fwd) msg c)
+
+
+{-| Pack up a an indexed component message `msg` in an `obs`.
+-}
+pack
+  : Update model msg obs
+  -> Get (Indexed model) c
+  -> Set (Indexed model) c
+  -> model
+  -> (Msg c obs -> obs)
+  -> Index
+  -> msg
+  -> obs
+pack update get0 set0 model0 fwd = 
+  let
+    (get, set) = 
+      indexed get0 set0 model0 
+  in
+    \idx -> 
+      partial fwd (embedUpdate (get idx) (set idx) update) >> fwd
+
+
+{-| Pack up a singleton component message `msg` in an `obs`.
+-}
+pack1
+  : Update model msg obs
+  -> Get model c
+  -> Set model c
+  -> (Msg c obs -> obs)
+  -> msg
+  -> obs
+pack1 update get set fwd = 
+  partial fwd (embedUpdate get set update) >> fwd
 
 
 
@@ -234,39 +237,37 @@ messages.
 
 Its instructive to compare the types of the input `view` and `update` for a 
 typical case. Notice that `create` transforms `model` -> `c` and
-`Html m` -> `Html (Msg c)`. 
+`Html m` -> `Html obs`.
 
   {- Input -}
-  view : (m -> obs) -> model -> List (Attributes m) -> List (Html m) -> Html m
-  update : m -> model -> (model, Cmd m)
+  view : (m -> obs) -> model -> List (Attributes obs) -> List (Html obs) -> Html obs
+  update : (m -> obs) -> model -> (Maybe model, Cmd obs)
 
   {- Output -}
-  type alias m' = Msg c
-  view : c -> List (Attributes m') -> List (Html m') -> Html m'
+  view : Index -> c -> List (Attributes obs) -> List (Html obs) -> Html obs
 
 Note that the input `view` function is assumed to take a function lifting its
 messages. 
-
 -}
 create 
-  : ((m -> obs) -> View model a)
- -> Update model m
+  : ((msg -> obs) -> View model a)
+ -> Update model msg obs
  -> Get (Indexed model) c
  -> Set (Indexed model) c
  -> model 
- -> (Msg c -> obs)
+ -> (Msg c obs -> obs)
  -> Index
  -> View c a
-create view update get0 set0 model0 = 
+create view update get0 set0 model0 fwd = 
   let
-    (get, set) = 
-      indexed get0 set0 model0 
+    get = 
+      fst (indexed get0 set0 model0)
 
-    embeddedUpdate idx = 
-      embedUpdate (get idx) (set idx) update
+    embeddedUpdate = 
+      pack update get0 set0 model0 fwd
   in
-    \f idx c -> 
-      (view (pack (embeddedUpdate idx) >> f)) (get idx c) 
+    \idx c -> 
+      (view (embeddedUpdate idx) (get idx c))
 
 
 {-| Like `create`, but for components that are assumed to have only one
@@ -274,38 +275,18 @@ instance.
 -}
 create1
   : ((msg -> obs) -> View model a)
- -> Update model msg
+ -> Update model msg obs
  -> Get model c
  -> Set model c
- -> (Msg c -> obs)
+ -> (Msg c obs -> obs)
  -> View c a
 
-create1 view update get set = 
+create1 view update get set fwd = 
   let
     embeddedUpdate = 
-      embedUpdate get set update
+      partial fwd (embedUpdate get set update) >> fwd
   in 
-    \f -> 
-      embedView get <| view (pack embeddedUpdate >> f)
-
-
-{-| Like `create1`, but for explicit no-op update functions. 
--}
-create1'
-  : ((msg -> obs) -> View model a)
- -> Update' model msg
- -> Get model c
- -> Set model c
- -> (Msg c -> obs)
- -> View c a
-
-create1' view upd' get set = 
-  let
-    embeddedUpdate = 
-      embedUpdate' get set upd'
-  in 
-    \f -> 
-      embedView get <| view (pack' embeddedUpdate >> f)
+    embedView get <| view embeddedUpdate
 
 
 {-| For components where consumers do care about the model of the 
@@ -339,6 +320,18 @@ accessors get0 set0 model0 idx =
     , map = \f c -> (get idx) c |> f |> flip (set idx) c
     , reset = \c -> get0 c |> Dict.remove idx |> (\m -> set0 m c)
     }
+
+
+{-| Generalise a standard TEA `update` function to one fitting with 
+parts (explicit lifter, explicit no-op). 
+-}
+generalize
+ :  (msg -> model -> (model, Cmd msg)) 
+ -> Update model msg obs
+generalize upd f m c = 
+  upd m c 
+    |> map2nd (Cmd.map f)
+    |> Just
 
 
 -- HELPERS
