@@ -121,28 +121,30 @@ embedUpdate get set update =
 -- INDEXED EMBEDDINGS
 
  
-{-| Type of indices. An index is a list of `Int` rather than just an `Int` to 
+{-| Type of indices. An index has to be `comparable`
+
+For example:
+An index can be a list of `Int` rather than just an `Int` to
 support nested dynamically constructed elements: Use indices `[0]`, `[1]`, ...
 for statically known top-level components, then use `[0,0]`, `[0,1]`, ...
-for a dynamically generated list of components. 
+for a dynamically generated list of components.
 -}
-type alias Index 
-  = List Int
- 
+type alias Index b = b
+
 
 {-| Indexed families of things.
 -}
-type alias Indexed a = 
-  Dict Index a 
+type alias Indexed c a
+  = Dict (Index c) a
 
 
-{-| Fix a getter and setter for an `Indexed model` to a particular `Index`.
+{-| Fix a getter and setter for an `Indexed comparable model` to a particular `Index comparable`.
 -}
 indexed : 
-    Get (Indexed model) c
- -> Set (Indexed model) c
+    Get (Indexed comparable model) c
+ -> Set (Indexed comparable model) c
  -> model
- -> (Index -> Get model c, Index -> Set model c)
+ -> (Index comparable -> Get model c, Index comparable -> Set model c)
 indexed get set model0 =  
   ( \idx c -> Dict.get idx (get c) |> Maybe.withDefault model0
   , \idx model c -> set (Dict.insert idx model (get c)) c
@@ -201,11 +203,11 @@ partial fwd upd msg =
 -}
 pack
   : Update model msg obs
-  -> Get (Indexed model) c
-  -> Set (Indexed model) c
+  -> Get (Indexed comparable model) c
+  -> Set (Indexed comparable model) c
   -> model
   -> (Msg c obs -> obs)
-  -> Index
+  -> Index comparable
   -> msg
   -> obs
 pack update get0 set0 model0 fwd = 
@@ -244,7 +246,7 @@ typical case. Notice that `create` transforms `model` -> `c` and
   update : (m -> obs) -> model -> (Maybe model, Cmd obs)
 
   {- Output -}
-  view : Index -> c -> List (Attributes obs) -> List (Html obs) -> Html obs
+  view : Index comparable -> c -> List (Attributes obs) -> List (Html obs) -> Html obs
 
 Note that the input `view` function is assumed to take a function lifting its
 messages. 
@@ -252,11 +254,11 @@ messages.
 create 
   : ((msg -> obs) -> View model a)
  -> Update model msg obs
- -> Get (Indexed model) c
- -> Set (Indexed model) c
+ -> Get (Indexed comparable model) c
+ -> Set (Indexed comparable model) c
  -> model 
  -> (Msg c obs -> obs)
- -> Index
+ -> Index comparable
  -> View c a
 create view update get0 set0 model0 fwd = 
   let
@@ -304,10 +306,10 @@ type alias Accessors model c =
 {-| Generate accessors.
 -}
 accessors 
-  : Get (Indexed model) c
- -> Set (Indexed model) c
+  : Get (Indexed comparable model) c
+ -> Set (Indexed comparable model) c
  -> model 
- -> Index
+ -> Index comparable
  -> Accessors model c
 
 accessors get0 set0 model0 idx = 
