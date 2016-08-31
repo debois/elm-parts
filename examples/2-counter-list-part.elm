@@ -4,7 +4,7 @@ import Html.Events exposing (onClick)
 import Dict 
 
 import Counter
-import Parts exposing (Indexed)
+import Parts
 
 
 main : Program Never
@@ -21,7 +21,7 @@ main =
 
 
 type alias Model =
-  { counter : Indexed Counter.Model 
+  { counter : Counter.Indexed Counter.Model
   , first : Int
   , last : Int
   }
