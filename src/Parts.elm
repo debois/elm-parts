@@ -129,13 +129,14 @@ support nested dynamically constructed elements: Use indices `[0]`, `[1]`, ...
 for statically known top-level components, then use `[0,0]`, `[0,1]`, ...
 for a dynamically generated list of components.
 -}
-type alias Index b = b
+type alias Index comparable = 
+  comparable
 
 
 {-| Indexed families of things.
 -}
-type alias Indexed c a
-  = Dict (Index c) a
+type alias Indexed comparable a
+  = Dict (Index comparable) a
 
 
 {-| Fix a getter and setter for an `Indexed comparable model` to a particular `Index comparable`.
