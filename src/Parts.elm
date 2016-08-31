@@ -73,7 +73,7 @@ TEA update function with explicit message lifting and no-op. You should have:
     fst (update f msg model) == Just model'   -- Change to model'
 -}
 type alias Update model msg obs = 
-  (msg -> obs) -> msg -> model -> Maybe (model, Cmd obs)
+  (msg -> obs) -> msg -> model -> (Maybe model, Cmd obs)
 
 
 {-| Standard TEA view function type. 
@@ -115,7 +115,7 @@ embedUpdate :
 embedUpdate get set update = 
   \f msg c -> 
      update f msg (get c) 
-       |> Maybe.map (map1st <| flip set c)
+       |> map1st (Maybe.map <| flip set c)
 
 
 -- INDEXED EMBEDDINGS
@@ -168,22 +168,21 @@ an actual carried message `m`:
     (update m) : c -> (c, Cmd m)
 -}
 type Msg c obs = 
-  Msg (c -> Maybe (c, Cmd obs))
+  Msg (c -> (Maybe c, Cmd obs))
 
-
-{-| Generic explict no-op update function for `Msg`. 
--}
-update' : Msg c obs -> c -> Maybe (c, Cmd obs)  
-update' (Msg f) c = 
-  f c 
-  
 
 {-| Generic update function for `Msg`. 
 -}
 update : Msg c obs -> c -> (c, Cmd obs)  
 update (Msg f) c = 
-  f c |> Maybe.withDefault (c, Cmd.none)
-    
+  f c |> map1st (Maybe.withDefault c)
+  
+
+{-| Generic update function for `Msg`, explicit no-op 
+-}
+update' : Msg c obs -> c -> (Maybe c, Cmd obs)  
+update' (Msg f) c = 
+  f c 
   
 
 
@@ -332,8 +331,8 @@ generalize
  -> Update model msg obs
 generalize upd f m c = 
   upd m c 
+    |> map1st Just
     |> map2nd (Cmd.map f)
-    |> Just
 
 
 -- HELPERS
