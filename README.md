@@ -42,9 +42,9 @@ for the component, exacerbating (1) above.
 One appropriate use-case for elm-parts, where you can accept these drawbacks, 
 is when writing a UI-component library. (Incidentally, its the only such 
 use-case I know of.) As a library author, (1) you should be
-willing to take upon yourself the tediousness of (1) for your users. Your 
-users shouldn't care about your internal messages anyway, so (2).
-And UI-components generally, but not always, can be written such that they 
+willing to take upon yourself the tediousness of (1) for your users. (2) Your 
+users shouldn't care about your internal messages anyway.
+And (3) UI-components generally, but not always, can be written such that they 
 are configured exclusively through view (3)---again, see [sortable table](https://github.com/evancz/elm-sortable-table/blob/master/examples/1-presidents.elm).
 
 Elm-parts was developed and is in active use as a supporting library for 
