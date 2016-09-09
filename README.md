@@ -18,6 +18,37 @@ and Action, all of which can be dispatched by the single `update` function in
 this module. We call such a lifted component a "part" (think "interchangeable
 parts".)
 
+# Drawbacks
+
+1. Elm-parts moves work from component consumers to component authors. As a 
+component author, you have to produce some elm-parts boilerplate. Producing 
+this boilerplate is prone to sometimes difficult-to-debug type errors. 
+
+2. Elm-parts relies on sending functions in messages, in violation of the
+[recent guidelines](https://github.com/evancz/elm-sortable-table#usage-rules). 
+This means consumers of components trying to debug parts messages with 
+the idiomatic
+```elm
+  update msg model = 
+    case Debug.log "update" msg of 
+      ...
+```
+will see an unhelpful `Msg <function>` rather than the actual `Msg` being sent. 
+
+3. If component users need to access the `Model` of your component or send
+messages to its `update` function, you'll need to write additional boilerplate
+for the component, exacerbating (1) above. 
+
+The appropriate use-case for elm-parts, where you can accept these drawbacks, 
+is when writing a UI-component library. In those, as a library, you should be
+willing to take upon yourself the tediousness of (1) for your users. Your 
+users shouldn't care about your internal messages anyway, so (2) is acceptable.
+And UI-components generally, but not always, can be written such that they 
+are configured exclusively through view (again, see [sortable table](https://github.com/evancz/elm-sortable-table/blob/master/examples/1-presidents.elm).
+
+Elm-parts was developed and is in active use as a supporting library for 
+[elm-mdl](https://github.com/debois/elm-mdl).
+
 # Examples
 
 The 
