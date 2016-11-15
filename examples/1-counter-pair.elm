@@ -1,3 +1,4 @@
+module Main exposing (..)
 
 import Counter
 import Html exposing (Html, button, div, text)
@@ -8,7 +9,7 @@ import Html.Events exposing (onClick)
 main : Program Never
 main =
   App.program
-    { init = init 0 0 
+    { init = init 0 0
     , update = update
     , view = view
     , subscriptions = always Sub.none
@@ -25,12 +26,12 @@ type alias Model =
   }
 
 
-init : Int -> Int -> (Model, Cmd Msg)
+init : Int -> Int -> ( Model, Cmd Msg )
 init top bottom =
   ( { topCounter = Counter.init top
     , bottomCounter = Counter.init bottom
     }
-  , Cmd.none 
+  , Cmd.none
   )
 
 
@@ -44,29 +45,30 @@ type Msg
   | Bottom Counter.Msg
 
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
   case message of
     Reset ->
       init 0 0
 
     Top msg ->
-      let 
-        (counter', cmd) = 
-          Counter.update msg model.topCounter 
+      let
+        ( counter_, cmd ) =
+          Counter.update msg model.topCounter
       in
-        ( { model | topCounter = counter' }
+        ( { model | topCounter = counter_ }
         , Cmd.map Top cmd
         )
 
     Bottom msg ->
-      let 
-        (counter', cmd) = 
-          Counter.update msg model.bottomCounter 
+      let
+        ( counter_, cmd ) =
+          Counter.update msg model.bottomCounter
       in
-        ( { model | bottomCounter = counter' }
+        ( { model | bottomCounter = counter_ }
         , Cmd.map Bottom cmd
         )
+
 
 
 -- VIEW

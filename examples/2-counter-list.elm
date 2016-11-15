@@ -1,8 +1,9 @@
+module Main exposing (..)
+
 import Counter
 import Html exposing (..)
 import Html.App as App
 import Html.Events exposing (..)
-
 
 
 main : Program Never
@@ -19,12 +20,13 @@ main =
 
 
 type alias Model =
-    { counters : List ( ID, Counter.Model )
-    , nextID : ID
-    }
+  { counters : List ( ID, Counter.Model )
+  , nextID : ID
+  }
 
 
-type alias ID = Int
+type alias ID =
+  Int
 
 
 init : Model
@@ -62,12 +64,11 @@ update msg model =
 
     Modify id counterMsg ->
       let
-        updateCounter (counterID, counterModel) =
+        updateCounter ( counterID, counterModel ) =
           if counterID == id then
-            (counterID, Counter.update counterMsg counterModel |> fst)
-
+            ( counterID, Counter.update counterMsg counterModel |> Tuple.first )
           else
-            (counterID, counterModel)
+            ( counterID, counterModel )
       in
         { model | counters = List.map updateCounter model.counters }
 
@@ -88,9 +89,9 @@ view model =
     counters =
       List.map viewCounter model.counters
   in
-    div [] ([remove, insert] ++ counters)
+    div [] ([ remove, insert ] ++ counters)
 
 
-viewCounter : (ID, Counter.Model) -> Html Msg
-viewCounter (id, model) =
+viewCounter : ( ID, Counter.Model ) -> Html Msg
+viewCounter ( id, model ) =
   Counter.view (Modify id) model

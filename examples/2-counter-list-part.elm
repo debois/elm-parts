@@ -1,8 +1,9 @@
+module Main exposing (..)
+
 import Html exposing (Html, button, div, text)
 import Html.App as App
 import Html.Events exposing (onClick)
-import Dict 
-
+import Dict
 import Counter
 import Parts
 
@@ -10,11 +11,12 @@ import Parts
 main : Program Never
 main =
   App.program
-    { init = (init, Cmd.none)
+    { init = ( init, Cmd.none )
     , subscriptions = always Sub.none
     , update = update
     , view = view
     }
+
 
 
 -- MODEL
@@ -35,6 +37,7 @@ init =
   }
 
 
+
 -- UPDATE
 
 
@@ -45,25 +48,26 @@ type Msg
 
 
 reset : Int -> Model -> Model
-reset k model = 
-  .reset (Counter.find [k]) model
+reset k model =
+  .reset (Counter.find [ k ]) model
 
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
   case msg of
-    Insert -> 
+    Insert ->
       ( { model | last = model.last + 1 } |> reset (model.last + 1)
       , Cmd.none
       )
 
-    Remove -> 
+    Remove ->
       ( { model | first = model.first + 1 } |> reset model.first
       , Cmd.none
       )
 
-    CounterMsg msg' -> 
-      Parts.update msg' model
+    CounterMsg msg_ ->
+      Parts.update msg_ model
+
 
 
 -- VIEW
@@ -71,7 +75,7 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
- let
+  let
     remove =
       button [ onClick Remove ] [ text "Remove" ]
 
@@ -79,8 +83,8 @@ view model =
       button [ onClick Insert ] [ text "Add" ]
 
     counters =
-      [model.first .. model.last]
-        |> List.map 
-            (\idx -> Counter.render CounterMsg [idx] model) 
+      List.range model.first model.last
+        |> List.map
+          (\idx -> Counter.render CounterMsg [ idx ] model)
   in
-    div [] ([remove, insert] ++ counters)
+    div [] ([ remove, insert ] ++ counters)
