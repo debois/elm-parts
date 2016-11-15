@@ -3,7 +3,7 @@ module Parts exposing
   , Get, Set, embedView, embedUpdate
   , Index, Indexed, indexed
   , Msg
-  , partial, update, update', create, create1, accessors, Accessors
+  , partial, update, update_, create, create1, accessors, Accessors
   , generalize, pack, pack1
   )
 
@@ -17,8 +17,8 @@ to have message type `obs` (for "observation").
 # Lazyness
 
 Recall that `Html.Lazy` avoids re-computing views when the model doesn't change
-across updates. However, "doesn't change" does not mean `model == model'` but rather
-the stricter `model === model'` (in Javascript terms). That is, the old and new model
+across updates. However, "doesn't change" does not mean `model == model_` but rather
+the stricter `model === model_` (in Javascript terms). That is, the old and new model
 must not only be structurally the same, they must be literally the same
 data-structure in memory.  
 
@@ -26,11 +26,11 @@ Parts generally do not achieve referential equality of no-op updates, since we
 are wrapping updates conceptually like this: 
 
     let (submodel, submsgs) = SubComponent.update msg model.submodel 
-        model' = { model | submodel = submodel }
+        model_ = { model | submodel = submodel }
     in 
         ...
 In the second line, even if `submodel == model.submodel` and so `model ==
-model'`, we won't have (in Javascript terms) `model === model'`. 
+model_`, we won't have (in Javascript terms) `model === model_`. 
 
 For this reason, the result of `update` functions used in parts should be
 `Maybe (model, Cmd msg)` rather than the usual `(model, Cmd msg)`; the 
@@ -53,7 +53,7 @@ function which lifts the parts messages to that of its parent.
 @docs Index, Indexed, indexed
 
 # Message embeddings
-@docs Msg, update, update', partial
+@docs Msg, update, update_, partial
 
 # Part construction
 @docs create, create1, generalize, pack, pack1
@@ -69,8 +69,8 @@ import Dict exposing (Dict)
 
 TEA update function with explicit message lifting and no-op. You should have:
 
-    fst (update f msg model) == Nothing       -- No change to model
-    fst (update f msg model) == Just model'   -- Change to model'
+    Tuple.first (update f msg model) == Nothing       -- No change to model
+    Tuple.first (update f msg model) == Just model_   -- Change to model_
 -}
 type alias Update model msg obs = 
   (msg -> obs) -> msg -> model -> (Maybe model, Cmd obs)
@@ -181,8 +181,8 @@ update (Msg f) c =
 
 {-| Generic update function for `Msg`, explicit no-op 
 -}
-update' : Msg c obs -> c -> (Maybe c, Cmd obs)  
-update' (Msg f) c = 
+update_ : Msg c obs -> c -> (Maybe c, Cmd obs)  
+update_ (Msg f) c = 
   f c 
   
 
@@ -263,7 +263,7 @@ create
 create view update get0 set0 model0 fwd = 
   let
     get = 
-      fst (indexed get0 set0 model0)
+      Tuple.first (indexed get0 set0 model0)
 
     embeddedUpdate = 
       pack update get0 set0 model0 fwd
@@ -306,8 +306,8 @@ type alias Accessors model c =
 {-| Generate accessors.
 -}
 accessors 
-  : Get (Indexed comparable model) c
- -> Set (Indexed comparable model) c
+  : Get (Dict comparable model) c
+ -> Set (Dict comparable model) c
  -> model 
  -> Index comparable
  -> Accessors model c

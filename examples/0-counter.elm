@@ -1,13 +1,12 @@
 
 import Counter
 import Html exposing (Html, button, div, text)
-import Html.App as App
 import Html.Events exposing (onClick)
 
 
-main : Program Never
+main : Program Never Model Msg
 main =
-  App.program
+  Html.program
     { init = init 0 
     , update = update
     , view = view
@@ -48,10 +47,10 @@ update message model =
 
     CounterMsg msg ->
       let 
-        (counter', cmd) = 
+        (counter_, cmd) = 
           Counter.update msg model.counter 
       in
-        ( { model | counter = counter' }
+        ( { model | counter = counter_ }
         , Cmd.map CounterMsg cmd
         )
 
