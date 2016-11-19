@@ -1,13 +1,12 @@
 import Counter
 import Html exposing (..)
-import Html.App as App
 import Html.Events exposing (..)
 
 
 
-main : Program Never
+main : Program Never Model Msg
 main =
-  App.beginnerProgram
+  Html.beginnerProgram
     { model = init
     , update = update
     , view = view
@@ -64,7 +63,7 @@ update msg model =
       let
         updateCounter (counterID, counterModel) =
           if counterID == id then
-            (counterID, Counter.update counterMsg counterModel |> fst)
+            (counterID, Counter.update counterMsg counterModel |> Tuple.first)
 
           else
             (counterID, counterModel)

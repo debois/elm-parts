@@ -3,7 +3,7 @@ module Parts exposing
   , Get, Set, embedView, embedUpdate
   , Index, Indexed, indexed
   , Msg
-  , partial, update, update', create, create1, accessors, Accessors
+  , partial, update, update_, create, create1, accessors, Accessors
   , generalize, pack, pack1
   )
 
@@ -17,8 +17,8 @@ to have message type `obs` (for "observation").
 # Lazyness
 
 Recall that `Html.Lazy` avoids re-computing views when the model doesn't change
-across updates. However, "doesn't change" does not mean `model == model'` but rather
-the stricter `model === model'` (in Javascript terms). That is, the old and new model
+across updates. However, "doesn't change" does not mean `model == model_` but rather
+the stricter `model === model_` (in Javascript terms). That is, the old and new model
 must not only be structurally the same, they must be literally the same
 data-structure in memory.  
 
@@ -26,11 +26,11 @@ Parts generally do not achieve referential equality of no-op updates, since we
 are wrapping updates conceptually like this: 
 
     let (submodel, submsgs) = SubComponent.update msg model.submodel 
-        model' = { model | submodel = submodel }
+        model_ = { model | submodel = submodel }
     in 
         ...
 In the second line, even if `submodel == model.submodel` and so `model ==
-model'`, we won't have (in Javascript terms) `model === model'`. 
+model_`, we won't have (in Javascript terms) `model === model_`. 
 
 For this reason, the result of `update` functions used in parts should be
 `Maybe (model, Cmd msg)` rather than the usual `(model, Cmd msg)`; the 
@@ -53,7 +53,7 @@ function which lifts the parts messages to that of its parent.
 @docs Index, Indexed, indexed
 
 # Message embeddings
-@docs Msg, update, update', partial
+@docs Msg, update, update_, partial
 
 # Part construction
 @docs create, create1, generalize, pack, pack1
@@ -69,11 +69,11 @@ import Dict exposing (Dict)
 
 TEA update function with explicit message lifting and no-op. You should have:
 
-    fst (update f msg model) == Nothing       -- No change to model
-    fst (update f msg model) == Just model'   -- Change to model'
+    Tuple.first (update f msg model) == Nothing       -- No change to model
+    Tuple.first (update f msg model) == Just model_   -- Change to model_
 -}
 type alias Update model msg obs = 
-  (msg -> obs) -> msg -> model -> (Maybe model, Cmd obs)
+  (msg -> obs) -> msg -> model -> Maybe (model, Cmd obs)
 
 
 {-| Standard TEA view function type. 
@@ -107,11 +107,14 @@ embedView get view =
 
 {-| Lift an `Update` from operating on `model` to a c model `c`. 
 -}
-embedUpdate : 
-    Get model c
- -> Set model c
- -> Update model msg obs
- -> Update c msg obs
+embedUpdate
+    : (d -> e)
+    -> (a -> d -> c)
+    -> (f -> g -> e -> ( Maybe a, b ))
+    -> f
+    -> g
+    -> d
+    -> ( Maybe c, b )
 embedUpdate get set update = 
   \f msg c -> 
      update f msg (get c) 
@@ -181,8 +184,8 @@ update (Msg f) c =
 
 {-| Generic update function for `Msg`, explicit no-op 
 -}
-update' : Msg c obs -> c -> (Maybe c, Cmd obs)  
-update' (Msg f) c = 
+update_ : Msg c obs -> c -> (Maybe c, Cmd obs)  
+update_ (Msg f) c = 
   f c 
   
 
@@ -193,7 +196,11 @@ update' (Msg f) c =
 {-| Partially apply an `Update` function to a `msg`, producing
 a generic Msg.
 -}
-partial : (Msg c obs -> obs) -> Update c msg obs -> msg -> Msg c obs
+partial
+    : (Msg b obs -> c)
+    -> ((a -> c) -> a -> b -> ( Maybe b, Cmd obs ))
+    -> a
+    -> Msg b obs
 partial fwd upd msg = 
   Msg (\c -> 
     upd (partial fwd upd >> fwd) msg c)
@@ -202,14 +209,14 @@ partial fwd upd msg =
 {-| Pack up a an indexed component message `msg` in an `obs`.
 -}
 pack
-  : Update model msg obs
-  -> Get (Indexed comparable model) c
-  -> Set (Indexed comparable model) c
-  -> model
-  -> (Msg c obs -> obs)
-  -> Index comparable
-  -> msg
-  -> obs
+    : ((a -> c) -> a -> b -> ( Maybe b, Cmd obs ))
+    -> Get (Indexed comparable b) c1
+    -> Set (Indexed comparable b) c1
+    -> b
+    -> (Msg c1 obs -> c)
+    -> Index comparable
+    -> a
+    -> c
 pack update get0 set0 model0 fwd = 
   let
     (get, set) = 
@@ -222,12 +229,12 @@ pack update get0 set0 model0 fwd =
 {-| Pack up a singleton component message `msg` in an `obs`.
 -}
 pack1
-  : Update model msg obs
-  -> Get model c
-  -> Set model c
-  -> (Msg c obs -> obs)
-  -> msg
-  -> obs
+    : ((b -> c) -> b -> d -> ( Maybe a, Cmd obs ))
+    -> (c1 -> d)
+    -> (a -> c1 -> c1)
+    -> (Msg c1 obs -> c)
+    -> b
+    -> c
 pack1 update get set fwd = 
   partial fwd (embedUpdate get set update) >> fwd
 
@@ -251,19 +258,20 @@ typical case. Notice that `create` transforms `model` -> `c` and
 Note that the input `view` function is assumed to take a function lifting its
 messages. 
 -}
-create 
-  : ((msg -> obs) -> View model a)
- -> Update model msg obs
- -> Get (Indexed comparable model) c
- -> Set (Indexed comparable model) c
- -> model 
- -> (Msg c obs -> obs)
- -> Index comparable
- -> View c a
+create
+    : ((a -> c) -> b -> d)
+    -> ((a -> c) -> a -> b -> ( Maybe b, Cmd obs ))
+    -> Get (Indexed comparable b) e
+    -> Set (Indexed comparable b) e
+    -> b
+    -> (Msg e obs -> c)
+    -> Index comparable
+    -> e
+    -> d
 create view update get0 set0 model0 fwd = 
   let
     get = 
-      fst (indexed get0 set0 model0)
+      Tuple.first (indexed get0 set0 model0)
 
     embeddedUpdate = 
       pack update get0 set0 model0 fwd
@@ -276,13 +284,12 @@ create view update get0 set0 model0 fwd =
 instance.
 -}
 create1
-  : ((msg -> obs) -> View model a)
- -> Update model msg obs
- -> Get model c
- -> Set model c
- -> (Msg c obs -> obs)
- -> View c a
-
+    : ((b -> c) -> View d a)
+    -> ((b -> c) -> b -> d -> ( Maybe a1, Cmd obs ))
+    -> (c1 -> d)
+    -> (a1 -> c1 -> c1)
+    -> (Msg c1 obs -> c)
+    -> View c1 a
 create1 view update get set fwd = 
   let
     embeddedUpdate = 
@@ -306,8 +313,8 @@ type alias Accessors model c =
 {-| Generate accessors.
 -}
 accessors 
-  : Get (Indexed comparable model) c
- -> Set (Indexed comparable model) c
+  : Get (Dict comparable model) c
+ -> Set (Dict comparable model) c
  -> model 
  -> Index comparable
  -> Accessors model c
@@ -328,8 +335,11 @@ accessors get0 set0 model0 idx =
 parts (explicit lifter, explicit no-op). 
 -}
 generalize
- :  (msg -> model -> (model, Cmd msg)) 
- -> Update model msg obs
+    : (b -> c -> ( a, Cmd a1 ))
+    -> (a1 -> msg)
+    -> b
+    -> c
+    -> ( Maybe a, Cmd msg )
 generalize upd f m c = 
   upd m c 
     |> map1st Just

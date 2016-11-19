@@ -1,5 +1,4 @@
 import Html exposing (Html, button, div, text)
-import Html.App as App
 import Html.Events exposing (onClick)
 import Dict 
 
@@ -7,9 +6,9 @@ import Counter
 import Parts
 
 
-main : Program Never
+main : Program Never Model Msg
 main =
-  App.program
+  Html.program
     { init = (init, Cmd.none)
     , subscriptions = always Sub.none
     , update = update
@@ -62,8 +61,8 @@ update msg model =
       , Cmd.none
       )
 
-    CounterMsg msg' -> 
-      Parts.update msg' model
+    CounterMsg msg_ -> 
+      Parts.update msg_ model
 
 
 -- VIEW
@@ -79,7 +78,7 @@ view model =
       button [ onClick Insert ] [ text "Add" ]
 
     counters =
-      [model.first .. model.last]
+      List.range model.first model.last
         |> List.map 
             (\idx -> Counter.render CounterMsg [idx] model) 
   in

@@ -1,5 +1,4 @@
 import Html exposing (Html, button, div, text)
-import Html.App as App
 import Html.Events exposing (onClick)
 import Dict 
 
@@ -7,9 +6,9 @@ import Counter
 import Parts
 
 
-main : Program Never
+main : Program Never Model Msg
 main =
-  App.program
+  Html.program
     { init = init
     , subscriptions = always Sub.none
     , update = update
@@ -46,8 +45,8 @@ update msg model =
     Reset ->
       init
 
-    CounterMsg msg' -> 
-      Parts.update msg' model
+    CounterMsg msg_ -> 
+      Parts.update msg_ model
 
 
 -- VIEW
