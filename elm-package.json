@@ -1,5 +1,5 @@
 {
-    "version": "1.0.0",
+    "version": "2.0.0",
     "summary": "Reduce Elm Architecture boilerplate",
     "repository": "https://github.com/omarroth/elm-parts.git",
     "license": "Apache License, version 2.0",
