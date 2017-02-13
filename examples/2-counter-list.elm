@@ -2,13 +2,12 @@ module Main exposing (..)
 
 import Counter
 import Html exposing (..)
-import Html.App as App
 import Html.Events exposing (..)
 
 
-main : Program Never
+main : Program Never Model Msg
 main =
-  App.beginnerProgram
+  Html.beginnerProgram
     { model = init
     , update = update
     , view = view

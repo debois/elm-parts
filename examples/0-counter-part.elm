@@ -1,16 +1,15 @@
 module Main exposing (..)
 
 import Html exposing (Html, button, div, text)
-import Html.App as App
 import Html.Events exposing (onClick)
 import Dict
 import Counter
 import Parts
 
 
-main : Program Never
+main : Program Never Model Msg
 main =
-  App.program
+  Html.program
     { init = init
     , subscriptions = always Sub.none
     , update = update
