@@ -131,7 +131,7 @@ embedUpdate :
 embedUpdate get set update =
     \f msg c ->
         update f msg (get c)
-            |> map1st (Maybe.map <| flip set c)
+            |> Tuple.mapFirst (Maybe.map <| flip set c)
 
 
 
@@ -194,7 +194,7 @@ type Msg c obs
 -}
 update : Msg c obs -> c -> ( c, Cmd obs )
 update (Msg f) c =
-    f c |> map1st (Maybe.withDefault c)
+    f c |> Tuple.mapFirst (Maybe.withDefault c)
 
 
 {-| Generic update function for `Msg`, explicit no-op
@@ -349,19 +349,8 @@ generalize :
     -> Update model msg obs
 generalize upd f m c =
     upd m c
-        |> map1st Just
-        |> map2nd (Cmd.map f)
+        |> Tuple.mapFirst Just
+        |> Tuple.mapSecond (Cmd.map f)
 
 
 
--- HELPERS
-
-
-map1st : (a -> c) -> ( a, b ) -> ( c, b )
-map1st f ( x, y ) =
-    ( f x, y )
-
-
-map2nd : (b -> c) -> ( a, b ) -> ( a, c )
-map2nd f ( x, y ) =
-    ( x, f y )
